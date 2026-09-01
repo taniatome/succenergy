@@ -1,9 +1,9 @@
 import 'package:flutter/widgets.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/inputs/scale_input.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_typography.dart';
+import '../inputs/scale_input.dart';
 
 /// An assessment question answered by moving a scale between two poles.
 class ScaleQuestion extends StatelessWidget {

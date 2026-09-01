@@ -9,7 +9,22 @@ import 'locale_provider.dart';
 /// [params]. Widgets never hold literal display text.
 extension LocalizedContext on BuildContext {
   String tr(String key, {Map<String, String>? params}) {
-    final String raw = watch<LocaleProvider>().resolve(key);
+    return _fill(watch<LocaleProvider>().resolve(key), params);
+  }
+
+  /// The same lookup for event handlers.
+  ///
+  /// Form validation runs from a tap rather than from a build, and `watch` is
+  /// not allowed there: it would subscribe a callback to locale changes and
+  /// asserts. Error messages resolve through this instead.
+  String trRead(String key, {Map<String, String>? params}) {
+    return _fill(read<LocaleProvider>().resolve(key), params);
+  }
+
+  /// The active language code, for data that carries per-locale variants.
+  String get localeCode => watch<LocaleProvider>().code;
+
+  String _fill(String raw, Map<String, String>? params) {
     if (params == null || params.isEmpty) {
       return raw;
     }
@@ -19,7 +34,4 @@ extension LocalizedContext on BuildContext {
     });
     return out;
   }
-
-  /// The active language code, for data that carries per-locale variants.
-  String get localeCode => watch<LocaleProvider>().code;
 }

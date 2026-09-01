@@ -1,5 +1,18 @@
 /// The three plan tiers offered.
-enum SubscriptionTier { free, monthly, annual }
+///
+/// The app is free to download; nothing inside it opens until the trial is
+/// taken, and the monthly rate afterwards follows the activity chosen at
+/// registration.
+enum SubscriptionTier {
+  /// Seven days of full access for a nominal amount.
+  trial,
+
+  /// Reduced monthly rate for students and minorities.
+  student,
+
+  /// Standard monthly rate.
+  professional,
+}
 
 /// A purchasable plan, rendered on the Plans screen and comparison table.
 class SubscriptionPlan {
@@ -9,8 +22,6 @@ class SubscriptionPlan {
     required this.price,
     required this.periodKey,
     required this.featureValueKeys,
-    this.annualSaving,
-    this.isRecommended = false,
   });
 
   final SubscriptionTier tier;
@@ -27,10 +38,6 @@ class SubscriptionPlan {
   /// Feature localisation key to the value key describing this plan's level.
   final Map<String, String> featureValueKeys;
 
-  /// Money saved against paying monthly for a year, on the annual plan only.
-  final String? annualSaving;
-
-  final bool isRecommended;
-
-  bool get isPremium => tier != SubscriptionTier.free;
+  /// True for the two ongoing monthly plans, false for the seven-day trial.
+  bool get isMonthly => tier != SubscriptionTier.trial;
 }

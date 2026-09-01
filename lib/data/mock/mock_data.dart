@@ -1,3 +1,4 @@
+import '../../core/constants/app_constants.dart';
 import '../models/action_item.dart';
 import '../models/app_notification.dart';
 import '../models/chat_message.dart';
@@ -45,7 +46,10 @@ class MockData {
     currentPrinciple: Principle.praxis,
     cycleDay: 19,
     dayStreak: 12,
-    tier: SubscriptionTier.monthly,
+    tier: SubscriptionTier.professional,
+    activity: UserActivity.professional,
+    dateOfBirth: DateTime(1991, 4, 17),
+    countryCode: 'MZ',
     tone: CoachingTone.direct,
     rhythm: CheckInRhythm.daily,
   );
@@ -1627,58 +1631,60 @@ class MockData {
 
   static List<SubscriptionPlan> get plans => const <SubscriptionPlan>[
     SubscriptionPlan(
-      tier: SubscriptionTier.free,
-      nameKey: 'subscription.plan.free',
-      price: r'$0',
-      periodKey: 'subscription.perMonth',
-      featureValueKeys: <String, String>{
-        'subscription.feature.coaching': 'subscription.feature.coaching.free',
-        'subscription.feature.memory': 'subscription.feature.memory.free',
-        'subscription.feature.exercises': 'subscription.feature.exercises.free',
-        'subscription.feature.goals': 'subscription.feature.goals.free',
-        'subscription.feature.personalisation':
-            'subscription.feature.personalisation.free',
-        'subscription.feature.progress': 'subscription.feature.progress.free',
-      },
+      tier: SubscriptionTier.trial,
+      nameKey: 'subscription.plan.trial',
+      price: AppConstants.trialPrice,
+      periodKey: 'subscription.perTrial',
+      featureValueKeys: includedFeatureValueKeys,
     ),
     SubscriptionPlan(
-      tier: SubscriptionTier.monthly,
-      nameKey: 'subscription.plan.monthly',
-      price: r'$9.99',
+      tier: SubscriptionTier.student,
+      nameKey: 'subscription.plan.student',
+      price: AppConstants.studentMonthlyPrice,
       periodKey: 'subscription.perMonth',
-      featureValueKeys: <String, String>{
-        'subscription.feature.coaching':
-            'subscription.feature.coaching.premium',
-        'subscription.feature.memory': 'subscription.feature.memory.premium',
-        'subscription.feature.exercises':
-            'subscription.feature.exercises.premium',
-        'subscription.feature.goals': 'subscription.feature.goals.premium',
-        'subscription.feature.personalisation':
-            'subscription.feature.personalisation.premium',
-        'subscription.feature.progress':
-            'subscription.feature.progress.premium',
-      },
+      featureValueKeys: includedFeatureValueKeys,
     ),
     SubscriptionPlan(
-      tier: SubscriptionTier.annual,
-      nameKey: 'subscription.plan.annual',
-      price: r'$79.99',
-      periodKey: 'subscription.perYear',
-      annualSaving: r'$39.89',
-      isRecommended: true,
-      featureValueKeys: <String, String>{
-        'subscription.feature.coaching':
-            'subscription.feature.coaching.premium',
-        'subscription.feature.memory': 'subscription.feature.memory.premium',
-        'subscription.feature.exercises':
-            'subscription.feature.exercises.premium',
-        'subscription.feature.goals': 'subscription.feature.goals.premium',
-        'subscription.feature.personalisation':
-            'subscription.feature.personalisation.premium',
-        'subscription.feature.progress':
-            'subscription.feature.progress.premium',
-      },
+      tier: SubscriptionTier.professional,
+      nameKey: 'subscription.plan.professional',
+      price: AppConstants.professionalMonthlyPrice,
+      periodKey: 'subscription.perMonth',
+      featureValueKeys: includedFeatureValueKeys,
     ),
+  ];
+
+  /// What every tier includes, trial and monthly alike. The plans differ in
+  /// price alone, so they share one map rather than repeating it.
+  static const Map<String, String> includedFeatureValueKeys = <String, String>{
+    'subscription.feature.coaching': 'subscription.feature.coaching.premium',
+    'subscription.feature.memory': 'subscription.feature.memory.premium',
+    'subscription.feature.exercises': 'subscription.feature.exercises.premium',
+    'subscription.feature.goals': 'subscription.feature.goals.premium',
+    'subscription.feature.personalisation':
+        'subscription.feature.personalisation.premium',
+    'subscription.feature.progress': 'subscription.feature.progress.premium',
+  };
+
+  /// What an account reaches before the trial is taken. The comparison table
+  /// puts this beside [includedFeatureValueKeys], which is what shows the
+  /// user what the trial actually opens.
+  static const Map<String, String> lockedFeatureValueKeys = <String, String>{
+    'subscription.feature.coaching': 'subscription.feature.coaching.free',
+    'subscription.feature.memory': 'subscription.feature.memory.free',
+    'subscription.feature.exercises': 'subscription.feature.exercises.free',
+    'subscription.feature.goals': 'subscription.feature.goals.free',
+    'subscription.feature.personalisation':
+        'subscription.feature.personalisation.free',
+    'subscription.feature.progress': 'subscription.feature.progress.free',
+  };
+
+  /// What the trial screen lists as opening up the moment it is taken.
+  static const List<String> trialUnlockKeys = <String>[
+    'trial.unlock.coach',
+    'trial.unlock.exercises',
+    'trial.unlock.goals',
+    'trial.unlock.progress',
+    'trial.unlock.library',
   ];
 
   /// Feature rows in the order the comparison table renders them.
@@ -1704,7 +1710,8 @@ class MockData {
       currentPrinciple: Principle.planning,
       cycleDay: 8,
       dayStreak: 5,
-      tier: SubscriptionTier.annual,
+      tier: SubscriptionTier.professional,
+      activity: UserActivity.professional,
     ),
     User(
       id: 'user-helena',
@@ -1714,7 +1721,8 @@ class MockData {
       currentPrinciple: Principle.persistence,
       cycleDay: 26,
       dayStreak: 19,
-      tier: SubscriptionTier.monthly,
+      tier: SubscriptionTier.student,
+      activity: UserActivity.studentMinorities,
     ),
     User(
       id: 'user-nuno',
@@ -1724,7 +1732,7 @@ class MockData {
       currentPrinciple: Principle.purpose,
       cycleDay: 3,
       dayStreak: 2,
-      tier: SubscriptionTier.free,
+      tier: SubscriptionTier.trial,
     ),
     User(
       id: 'user-dalia',
@@ -1734,7 +1742,8 @@ class MockData {
       currentPrinciple: Principle.perfection,
       cycleDay: 34,
       dayStreak: 41,
-      tier: SubscriptionTier.annual,
+      tier: SubscriptionTier.professional,
+      activity: UserActivity.professional,
     ),
     User(
       id: 'user-tomas',
@@ -1744,7 +1753,7 @@ class MockData {
       currentPrinciple: Principle.passion,
       cycleDay: 11,
       dayStreak: 0,
-      tier: SubscriptionTier.free,
+      tier: SubscriptionTier.trial,
     ),
   ];
 

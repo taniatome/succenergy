@@ -11,8 +11,8 @@ import '../../../core/widgets/section_eyebrow.dart';
 ///
 /// Picks the greeting from the time of day and states where the user is in
 /// the current cycle. Carries the three chrome affordances — notifications,
-/// profile and settings — which are the app's only entrance to Settings and,
-/// through it, to Subscription, Help and the admin console.
+/// profile and the kebab menu — the last being the app's only entrance to
+/// Settings and, through it, to Subscription, Help and the admin console.
 class GreetingHeader extends StatelessWidget {
   const GreetingHeader({
     required this.firstName,
@@ -66,7 +66,7 @@ class GreetingHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.xs),
         _iconAction(mark: AppIconMark.person, onTap: onProfile),
         const SizedBox(width: AppSpacing.xs),
-        _iconAction(mark: AppIconMark.sliders, onTap: onSettings),
+        _iconAction(mark: AppIconMark.kebab, onTap: onSettings),
       ],
     );
   }

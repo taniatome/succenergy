@@ -39,9 +39,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() {
       _emailError =
           email.isEmpty
-              ? context.tr('auth.error.emailRequired')
+              ? context.trRead('auth.error.emailRequired')
               : (!email.contains('@') || !email.contains('.'))
-              ? context.tr('auth.error.emailInvalid')
+              ? context.trRead('auth.error.emailInvalid')
               : null;
     });
     if (_emailError != null) {
@@ -74,7 +74,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       AppTextField(
         controller: _email,
         label: context.tr('auth.field.email'),
-        hint: 'marisa.chissano@lumeconsult.co.mz',
+        hint: context.tr('auth.hint.email'),
         errorText: _emailError,
         keyboardType: TextInputType.emailAddress,
         textInputAction: TextInputAction.done,

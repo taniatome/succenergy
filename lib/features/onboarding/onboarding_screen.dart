@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -7,21 +9,22 @@ import '../../core/constants/app_constants.dart';
 import '../../core/localization/string_extensions.dart';
 import '../../core/motion/app_curves.dart';
 import '../../core/motion/app_durations.dart';
+import '../../core/services/notification_permission.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/buttons/primary_button.dart';
 import '../../core/widgets/buttons/text_link_button.dart';
+import '../../core/widgets/questions/free_text_question.dart';
+import '../../core/widgets/questions/multi_select_question.dart';
+import '../../core/widgets/questions/question_progress_bar.dart';
+import '../../core/widgets/questions/scale_question.dart';
 import '../../core/widgets/screen_background.dart';
 import '../../data/models/onboarding_response.dart';
 import 'onboarding_provider.dart';
-import 'widgets/free_text_question.dart';
-import 'widgets/multi_select_question.dart';
-import 'widgets/onboarding_progress_bar.dart';
 import 'widgets/onboarding_summary.dart';
-import 'widgets/scale_question.dart';
 
-/// The seven-question assessment, one question per screen, closing on a
-/// summary of what the coach heard.
+/// The four questions asked after registration, one per screen, closing on a
+/// summary of what the coach heard across all seven.
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
 
@@ -41,28 +44,7 @@ class OnboardingScreen extends StatelessWidget {
               ),
               child: Column(
                 children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.screenH,
-                      AppSpacing.md,
-                      AppSpacing.screenH,
-                      0,
-                    ),
-                    child: OnboardingProgressBar(
-                      progress: provider.progress,
-                      label:
-                          provider.isSummary
-                              ? context.tr('onboarding.summary.eyebrow')
-                              : context.tr(
-                                'onboarding.progress',
-                                params: <String, String>{
-                                  'current': '${provider.step + 1}',
-                                  'total':
-                                      '${AppConstants.onboardingQuestionCount}',
-                                },
-                              ),
-                    ),
-                  ),
+                  _header(context, provider),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(
@@ -92,20 +74,36 @@ class OnboardingScreen extends StatelessWidget {
     );
   }
 
+  Widget _header(BuildContext context, OnboardingProvider p) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenH,
+        AppSpacing.md,
+        AppSpacing.screenH,
+        0,
+      ),
+      child: QuestionProgressBar(
+        progress: p.progress,
+        label:
+            p.isSummary
+                ? context.tr('onboarding.summary.eyebrow')
+                : context.tr(
+                  'onboarding.progress',
+                  params: <String, String>{
+                    'current': '${p.step + 1}',
+                    'total': '${AppConstants.onboardingQuestionCount}',
+                  },
+                ),
+      ),
+    );
+  }
+
   Widget _body(BuildContext context, OnboardingProvider p) {
     if (p.isSummary) {
       return OnboardingSummary(response: p.draft);
     }
     switch (p.step) {
-      case 1:
-        return MultiSelectQuestion(
-          title: context.tr('onboarding.q2.title'),
-          help: context.tr('onboarding.q2.help'),
-          optionKeys: OnboardingProvider.focusAreaOptions,
-          selectedKeys: p.draft.focusAreaKeys,
-          onToggle: p.toggleFocusArea,
-        );
-      case 3:
+      case 0:
         return MultiSelectQuestion(
           title: context.tr('onboarding.q4.title'),
           help: context.tr('onboarding.q4.help'),
@@ -113,7 +111,7 @@ class OnboardingScreen extends StatelessWidget {
           selectedKeys: p.draft.priorityKeys,
           onToggle: p.togglePriority,
         );
-      case 5:
+      case 2:
         return ScaleQuestion(
           title: context.tr('onboarding.q6.title'),
           help: context.tr('onboarding.q6.help'),
@@ -128,26 +126,18 @@ class OnboardingScreen extends StatelessWidget {
   }
 
   Widget _freeText(BuildContext context, OnboardingProvider p) {
-    final int q = p.step + 1;
+    final bool goals = p.step == 1;
+    final String q = goals ? 'onboarding.q5' : 'onboarding.q7';
     final String locale = context.localeCode;
-    final String value = switch (p.step) {
-      0 => OnboardingResponse.textFor(p.draft.ambition, locale),
-      2 => OnboardingResponse.textFor(p.draft.challenge, locale),
-      4 => OnboardingResponse.textFor(p.draft.mainGoals, locale),
-      _ => OnboardingResponse.textFor(p.draft.successVision, locale),
-    };
-    final ValueChanged<String> onChanged = switch (p.step) {
-      0 => p.setAmbition,
-      2 => p.setChallenge,
-      4 => p.setMainGoals,
-      _ => p.setSuccessVision,
-    };
     return FreeTextQuestion(
-      title: context.tr('onboarding.q$q.title'),
-      help: context.tr('onboarding.q$q.help'),
-      hint: context.tr('onboarding.q$q.hint'),
-      value: value,
-      onChanged: onChanged,
+      title: context.tr('$q.title'),
+      help: context.tr('$q.help'),
+      hint: context.tr('$q.hint'),
+      value: OnboardingResponse.textFor(
+        goals ? p.draft.mainGoals : p.draft.successVision,
+        locale,
+      ),
+      onChanged: goals ? p.setMainGoals : p.setSuccessVision,
     );
   }
 
@@ -176,12 +166,20 @@ class OnboardingScreen extends StatelessWidget {
     );
   }
 
+  /// The last step both saves the assessment and asks for notification
+  /// permission: this is the first entry into the app proper, and the moment
+  /// the native prompt belongs.
+  ///
+  /// The request is not awaited. The system dialog sits over the Dashboard on
+  /// its own, and whether the user has answered it is not something the app
+  /// should hold the journey open for.
   Future<void> _advance(BuildContext context, OnboardingProvider p) async {
     if (!p.isSummary) {
       p.next();
       return;
     }
     await p.save();
+    unawaited(NotificationPermission.requestOnce());
     if (context.mounted) {
       context.go(Routes.dashboard);
     }

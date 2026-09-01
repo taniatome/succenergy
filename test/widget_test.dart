@@ -27,6 +27,14 @@ void main() {
   testWidgets('launches into the splash sequence and reaches Welcome', (
     WidgetTester tester,
   ) async {
+    // Reduced motion stops the Welcome screen's ambient drift, which is
+    // continuous and would otherwise keep the tree from ever settling.
+    tester.binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(
+      tester.binding.platformDispatcher.clearAccessibilityFeaturesTestValue,
+    );
+
     await tester.pumpWidget(
       MultiProvider(
         providers: <SingleChildWidget>[
@@ -55,7 +63,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle(const Duration(milliseconds: 200));
 
-    expect(find.text('Start your Journey within.'), findsOneWidget);
+    // The call to action carries its stressed word in a Text.rich span.
+    expect(
+      find.text('Start your Journey within.', findRichText: true),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }

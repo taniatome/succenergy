@@ -59,20 +59,20 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _validateEmail(String value) {
     final String trimmed = value.trim();
     if (trimmed.isEmpty) {
-      return context.tr('auth.error.emailRequired');
+      return context.trRead('auth.error.emailRequired');
     }
     if (!trimmed.contains('@') || !trimmed.contains('.')) {
-      return context.tr('auth.error.emailInvalid');
+      return context.trRead('auth.error.emailInvalid');
     }
     return null;
   }
 
   String? _validatePassword(String value) {
     if (value.isEmpty) {
-      return context.tr('auth.error.passwordRequired');
+      return context.trRead('auth.error.passwordRequired');
     }
     if (value.length < AppConstants.minPasswordLength) {
-      return context.tr('auth.error.passwordShort');
+      return context.trRead('auth.error.passwordShort');
     }
     return null;
   }
@@ -88,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
         AppTextField(
           controller: _email,
           label: context.tr('auth.field.email'),
-          hint: 'marisa.chissano@lumeconsult.co.mz',
+          hint: context.tr('auth.hint.email'),
           errorText: _emailError,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,

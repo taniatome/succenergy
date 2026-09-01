@@ -11,10 +11,15 @@ import '../../theme/app_typography.dart';
 ///
 /// Used for the single most important action on a screen. Pressing scales it
 /// down slightly and intensifies its bloom, so every tap feels physical.
+///
+/// [emphasis] holds one word of the label at a heavier weight, which is how
+/// the Welcome call to action keeps its stressed word now that the button
+/// itself is gold.
 class PrimaryButton extends StatefulWidget {
   const PrimaryButton({
     required this.label,
     required this.onPressed,
+    this.emphasis,
     this.icon,
     this.isBusy = false,
     this.expand = true,
@@ -23,6 +28,12 @@ class PrimaryButton extends StatefulWidget {
 
   final String label;
   final VoidCallback? onPressed;
+
+  /// A substring of [label] carried at heavier weight. Used for the word the
+  /// client wants held out on the Welcome call to action, which cannot be
+  /// picked out in gold here because the fill already is.
+  final String? emphasis;
+
   final IconData? icon;
 
   /// Shows a progress indicator and blocks input while an action resolves.
@@ -89,11 +100,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
         child: CircularProgressIndicator(strokeWidth: 2, color: fg),
       );
     }
-    final Text text = Text(
-      widget.label,
-      style: AppTypography.label.copyWith(color: fg),
-      textAlign: TextAlign.center,
-    );
+    final Widget text = _label(fg);
     if (widget.icon == null) {
       return text;
     }
@@ -104,6 +111,30 @@ class _PrimaryButtonState extends State<PrimaryButton> {
         const SizedBox(width: AppSpacing.sm),
         Flexible(child: text),
       ],
+    );
+  }
+
+  /// The label, with [PrimaryButton.emphasis] held at a heavier weight.
+  Widget _label(Color fg) {
+    final TextStyle base = AppTypography.label.copyWith(color: fg);
+    final String? emphasis = widget.emphasis;
+    if (emphasis == null || !widget.label.contains(emphasis)) {
+      return Text(widget.label, style: base, textAlign: TextAlign.center);
+    }
+    final int start = widget.label.indexOf(emphasis);
+    return Text.rich(
+      TextSpan(
+        style: base,
+        children: <TextSpan>[
+          TextSpan(text: widget.label.substring(0, start)),
+          TextSpan(
+            text: emphasis,
+            style: base.copyWith(fontWeight: FontWeight.w800),
+          ),
+          TextSpan(text: widget.label.substring(start + emphasis.length)),
+        ],
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }

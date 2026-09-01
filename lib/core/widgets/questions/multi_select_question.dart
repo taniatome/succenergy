@@ -1,12 +1,12 @@
 import 'package:flutter/widgets.dart';
 
-import '../../../core/localization/string_extensions.dart';
-import '../../../core/motion/app_curves.dart';
-import '../../../core/motion/app_durations.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_shadows.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_typography.dart';
+import '../../localization/string_extensions.dart';
+import '../../motion/app_curves.dart';
+import '../../motion/app_durations.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_shadows.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_typography.dart';
 
 /// An assessment question answered by choosing from a set of chips.
 ///

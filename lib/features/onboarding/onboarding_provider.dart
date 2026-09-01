@@ -4,13 +4,20 @@ import '../../core/constants/app_constants.dart';
 import '../../data/models/onboarding_response.dart';
 import '../../data/repositories/user_repository.dart';
 
-/// Drives the seven-question assessment.
+/// Drives the four questions asked after the account exists.
 ///
-/// Holds the draft answers, the current step, and whether the step is
-/// complete enough to advance. Step [AppConstants.onboardingQuestionCount] is
-/// the closing summary.
+/// The second half of the assessment: priorities, main goals, motivation and
+/// what success looks like. The first three answers were given by the
+/// pre-registration quiz and are merged back in on [save], so Profile shows
+/// all seven.
+///
+/// Holds the draft answers, the current step, and whether the step is complete
+/// enough to advance. Step [AppConstants.onboardingQuestionCount] is the
+/// closing summary.
 class OnboardingProvider extends ChangeNotifier {
-  OnboardingProvider(this._users);
+  OnboardingProvider(this._users) {
+    _loadQuizAnswers();
+  }
 
   final UserRepository _users;
 
@@ -35,18 +42,7 @@ class OnboardingProvider extends ChangeNotifier {
   double get progress =>
       (_step / AppConstants.onboardingQuestionCount).clamp(0.0, 1.0);
 
-  /// Life areas offered by question two, at most two selectable.
-  static const List<String> focusAreaOptions = <String>[
-    'onboarding.option.career',
-    'onboarding.option.business',
-    'onboarding.option.health',
-    'onboarding.option.relationships',
-    'onboarding.option.learning',
-    'onboarding.option.finances',
-    'onboarding.option.purposeArea',
-  ];
-
-  /// Priorities offered by question four, at most three selectable.
+  /// Priorities offered by the first question here, at most three selectable.
   static const List<String> priorityOptions = <String>[
     'onboarding.option.confidence',
     'onboarding.option.focus',
@@ -57,24 +53,17 @@ class OnboardingProvider extends ChangeNotifier {
     'onboarding.option.team',
   ];
 
-  static const int maxFocusAreas = 2;
   static const int maxPriorities = 3;
 
   bool get canAdvance {
     switch (_step) {
       case 0:
-        return _text(_draft.ambition).isNotEmpty;
-      case 1:
-        return _draft.focusAreaKeys.isNotEmpty;
-      case 2:
-        return _text(_draft.challenge).isNotEmpty;
-      case 3:
         return _draft.priorityKeys.isNotEmpty;
-      case 4:
+      case 1:
         return _text(_draft.mainGoals).isNotEmpty;
-      case 5:
+      case 2:
         return _motivationSet;
-      case 6:
+      case 3:
         return _text(_draft.successVision).isNotEmpty;
       default:
         return true;
@@ -97,16 +86,6 @@ class OnboardingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setAmbition(String value) {
-    _draft = _draft.copyWith(ambition: OnboardingResponse.asTyped(value));
-    notifyListeners();
-  }
-
-  void setChallenge(String value) {
-    _draft = _draft.copyWith(challenge: OnboardingResponse.asTyped(value));
-    notifyListeners();
-  }
-
   void setMainGoals(String value) {
     _draft = _draft.copyWith(mainGoals: OnboardingResponse.asTyped(value));
     notifyListeners();
@@ -123,24 +102,45 @@ class OnboardingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleFocusArea(String key) {
-    _draft = _draft.copyWith(
-      focusAreaKeys: _toggle(_draft.focusAreaKeys, key, maxFocusAreas),
-    );
+  void togglePriority(String key) {
+    final List<String> next = List<String>.from(_draft.priorityKeys);
+    if (next.contains(key)) {
+      next.remove(key);
+    } else {
+      if (next.length >= maxPriorities) {
+        next.removeAt(0);
+      }
+      next.add(key);
+    }
+    _draft = _draft.copyWith(priorityKeys: next);
     notifyListeners();
   }
 
-  void togglePriority(String key) {
+  /// Reads the three pre-registration answers into the draft, so the closing
+  /// summary shows the whole assessment rather than the half asked here.
+  Future<void> _loadQuizAnswers() async {
+    final OnboardingResponse stored = await _users.loadOnboardingResponse();
     _draft = _draft.copyWith(
-      priorityKeys: _toggle(_draft.priorityKeys, key, maxPriorities),
+      ambition: stored.ambition,
+      focusAreaKeys: stored.focusAreaKeys,
+      challenge: stored.challenge,
     );
     notifyListeners();
   }
 
   /// Persists the assessment. Called once, from the summary screen.
+  ///
+  /// The quiz answers are read again here rather than trusted from the draft,
+  /// so a slow first read can never write three empty fields over them.
   Future<void> save() async {
     _saving = true;
     notifyListeners();
+    final OnboardingResponse stored = await _users.loadOnboardingResponse();
+    _draft = _draft.copyWith(
+      ambition: stored.ambition,
+      focusAreaKeys: stored.focusAreaKeys,
+      challenge: stored.challenge,
+    );
     await _users.saveOnboardingResponse(_draft);
     _saving = false;
     notifyListeners();
@@ -148,17 +148,4 @@ class OnboardingProvider extends ChangeNotifier {
 
   String _text(Map<String, String> field) =>
       OnboardingResponse.textFor(field, 'en').trim();
-
-  List<String> _toggle(List<String> current, String key, int limit) {
-    final List<String> next = List<String>.from(current);
-    if (next.contains(key)) {
-      next.remove(key);
-    } else {
-      if (next.length >= limit) {
-        next.removeAt(0);
-      }
-      next.add(key);
-    }
-    return next;
-  }
 }

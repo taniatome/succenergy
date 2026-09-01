@@ -41,70 +41,73 @@ class LanguageSelectionScreen extends StatelessWidget {
                   horizontal: AppSpacing.screenH,
                   vertical: AppSpacing.xl,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    AnimatedReveal(
-                      index: 0,
-                      child: SectionEyebrow(
-                        label: context.tr('language.eyebrow'),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AnimatedReveal(
-                      index: 1,
-                      child: Text(
-                        context.tr('language.title'),
-                        style: AppTypography.displayMedium,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AnimatedReveal(
-                      index: 2,
-                      child: Text(
-                        context.tr('language.subtitle'),
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    AnimatedReveal(
-                      index: 3,
-                      child: LanguageOptionCard(
-                        code: 'en',
-                        name: context.tr('language.english'),
-                        nativeName: context.tr('language.englishNative'),
-                        selected: locale.code == 'en',
-                        onTap: () => locale.setLocale('en'),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AnimatedReveal(
-                      index: 4,
-                      child: LanguageOptionCard(
-                        code: 'pt',
-                        name: context.tr('language.portuguese'),
-                        nativeName: context.tr('language.portugueseNative'),
-                        selected: locale.code == 'pt',
-                        onTap: () => locale.setLocale('pt'),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    AnimatedReveal(
-                      index: 5,
-                      child: PrimaryButton(
-                        label: context.tr('language.confirm'),
-                        onPressed: () => context.go(Routes.register),
-                      ),
-                    ),
-                  ],
-                ),
+                child: _content(context, locale),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// The heading, the two language cards and the action, in one column.
+  Widget _content(BuildContext context, LocaleProvider locale) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        AnimatedReveal(
+          index: 0,
+          child: SectionEyebrow(label: context.tr('language.eyebrow')),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AnimatedReveal(
+          index: 1,
+          child: Text(
+            context.tr('language.title'),
+            style: AppTypography.displayMedium,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AnimatedReveal(
+          index: 2,
+          child: Text(
+            context.tr('language.subtitle'),
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AnimatedReveal(
+          index: 3,
+          child: LanguageOptionCard(
+            code: 'en',
+            name: context.tr('language.english'),
+            nativeName: context.tr('language.englishNative'),
+            selected: locale.code == 'en',
+            onTap: () => locale.setLocale('en'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AnimatedReveal(
+          index: 4,
+          child: LanguageOptionCard(
+            code: 'pt',
+            name: context.tr('language.portuguese'),
+            nativeName: context.tr('language.portugueseNative'),
+            selected: locale.code == 'pt',
+            onTap: () => locale.setLocale('pt'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AnimatedReveal(
+          index: 5,
+          child: PrimaryButton(
+            label: context.tr('language.confirm'),
+            onPressed: () => context.go(Routes.quiz),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -52,7 +52,7 @@ class AdminUserRow extends StatelessWidget {
               context.tr(_planKey).toUpperCase(),
               style: AppTypography.metricLabel.copyWith(
                 color:
-                    user.tier == SubscriptionTier.free
+                    user.tier == SubscriptionTier.trial
                         ? AppColors.textSecondary
                         : AppColors.gold,
               ),
@@ -76,12 +76,12 @@ class AdminUserRow extends StatelessWidget {
 
   String get _planKey {
     switch (user.tier) {
-      case SubscriptionTier.free:
-        return 'admin.users.planFree';
-      case SubscriptionTier.monthly:
-        return 'admin.users.planMonthly';
-      case SubscriptionTier.annual:
-        return 'admin.users.planAnnual';
+      case SubscriptionTier.trial:
+        return 'admin.users.planTrial';
+      case SubscriptionTier.student:
+        return 'admin.users.planStudent';
+      case SubscriptionTier.professional:
+        return 'admin.users.planProfessional';
     }
   }
 }

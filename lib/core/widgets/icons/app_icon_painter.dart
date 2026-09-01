@@ -57,6 +57,10 @@ class AppIconPainter extends CustomPainter {
         _sliders(canvas, stroke, fill);
       case AppIconMark.person:
         _person(canvas, stroke);
+      case AppIconMark.kebab:
+        _kebab(canvas, fill);
+      case AppIconMark.chevronDown:
+        _chevronDown(canvas, stroke);
     }
 
     canvas.restore();
@@ -157,6 +161,26 @@ class AppIconPainter extends CustomPainter {
       _rad(200),
       _rad(140),
       false,
+      stroke,
+    );
+  }
+
+  /// Three dots up the centre, spaced on the grid so the mark reads at 19px
+  /// beside the chime and the person.
+  void _kebab(Canvas canvas, Paint fill) {
+    for (final double y in <double>[6.2, 12, 17.8]) {
+      canvas.drawCircle(Offset(12, y), 1.85, fill);
+    }
+  }
+
+  /// A chevron pointing down, for a row that opens in place.
+  void _chevronDown(Canvas canvas, Paint stroke) {
+    canvas.drawPath(
+      _path(const <Offset>[
+        Offset(6.4, 9.8),
+        Offset(12, 15.2),
+        Offset(17.6, 9.8),
+      ]),
       stroke,
     );
   }

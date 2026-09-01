@@ -9,10 +9,19 @@ class Routes {
   static const String welcome = '/welcome';
   static const String language = '/language';
 
+  /// The three questions asked before an account exists.
+  static const String quiz = '/quiz';
+
   static const String login = '/login';
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
   static const String onboarding = '/onboarding';
+
+  /// The paywall, between registration and onboarding.
+  static const String trial = '/trial';
+
+  /// The one-time welcome moment shown once the trial is taken.
+  static const String trialWelcome = '/trial/welcome';
 
   static const String dashboard = '/dashboard';
   static const String goals = '/goals';
@@ -36,6 +45,7 @@ class Routes {
   static const String notifications = '/notifications';
   static const String subscription = '/subscription';
   static const String settings = '/settings';
+  static const String recharge = '/recharge';
   static const String help = '/help';
   static const String adminGate = '/admin';
   static const String adminConsole = '/admin/console';

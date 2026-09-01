@@ -94,6 +94,23 @@ class AppStrings {
         'Seven questions and your coach will know how to work with you.',
     'auth.field.name': 'Full name',
     'auth.field.email': 'Email',
+    'auth.field.dob': 'Date of birth',
+    'auth.field.country': 'Country',
+    'auth.field.activity': 'Activity',
+    'auth.hint.name': 'Tânia Tomé',
+    'auth.hint.email': 'taniatome@succenergy.com',
+    'auth.activity.student': 'Student | Minorities',
+    'auth.activity.professional': 'Professional',
+    'auth.dob.placeholder': 'Select your date of birth',
+    'auth.dob.day': 'Day',
+    'auth.dob.month': 'Month',
+    'auth.dob.year': 'Year',
+    'auth.country.placeholder': 'Select your country',
+    'auth.country.search': 'Search countries',
+    'auth.country.empty': 'No country matches that.',
+    'auth.consent.terms': 'I accept the terms and conditions.',
+    'auth.consent.truth':
+        'I confirm that all the information I have given is true.',
     'auth.field.password': 'Password',
     'auth.field.confirmPassword': 'Confirm password',
     'auth.action.login': 'Log in',
@@ -107,6 +124,10 @@ class AppStrings {
     'auth.error.passwordRequired': 'Enter your password.',
     'auth.error.passwordShort': 'Use at least 8 characters.',
     'auth.error.passwordMatch': 'The two passwords do not match.',
+    'auth.error.dobRequired': 'Enter your date of birth.',
+    'auth.error.dobTooYoung': 'You have to be at least 16 to register.',
+    'auth.error.countryRequired': 'Choose your country.',
+    'auth.error.consentRequired': 'Tick both boxes before you continue.',
     'auth.forgot.title': 'Reset your password',
     'auth.forgot.subtitle':
         'Enter the email on your account and we will send a reset link.',
@@ -168,6 +189,45 @@ class AppStrings {
     'onboarding.option.balance': 'Balance and recovery',
     'onboarding.option.income': 'Growing income',
     'onboarding.option.team': 'Building a team',
+    'onboarding.option.procrastination': 'Stop Procrastination',
+    'onboarding.option.stress': 'Eliminate Stress',
+    'onboarding.option.balancedLife': 'Balanced Life',
+
+    // --- Entry quiz --------------------------------------------------------
+    'quiz.cta': 'Create your account',
+
+    // --- Trial -------------------------------------------------------------
+    'trial.eyebrow': 'Before you begin',
+    'trial.title': 'Seven days, one dollar',
+    'trial.subtitle':
+        'The app is free to download. The coach, the exercises and your '
+        'progress open the moment the trial starts.',
+    'trial.after.label': 'After the trial',
+    'trial.after.value': '{price} a month',
+    'trial.after.student':
+        'The Student | Minorities rate, from what you chose at registration.',
+    'trial.after.professional':
+        'The Professional rate, from what you chose at registration.',
+    'trial.unlock.title': 'What the trial opens',
+    'trial.unlock.coach': 'The AI Coach, with no message limit',
+    'trial.unlock.exercises': 'Every exercise across the seven principles',
+    'trial.unlock.goals': 'Goals, actions and milestones',
+    'trial.unlock.progress': 'Your full progress and cycle history',
+    'trial.unlock.library': 'Recharge with Succenergy and the library',
+    'trial.cta': 'Start 7-day trial',
+    'trial.smallPrint':
+        'Renews at {price} a month after {days} days. Cancel anytime.',
+    'trialWelcome.eyebrow': 'Welcome',
+    'trialWelcome.message':
+        'Congratulations, you are on the path to becoming a Succenergy '
+        'winner.',
+
+    // --- Recharge ----------------------------------------------------------
+    'recharge.title': 'Recharge with Succenergy',
+    'recharge.eyebrow': 'Coming soon',
+    'recharge.body':
+        'A short reset to take between cycles, built on the same seven '
+        'principles. It is being prepared and will open here.',
 
     // --- Dashboard ---------------------------------------------------------
     'dashboard.greeting.morning': 'Good morning, {name}',
@@ -361,19 +421,19 @@ class AppStrings {
     // --- Subscription ------------------------------------------------------
     'subscription.title': 'Plans',
     'subscription.subtitle':
-        'The full methodology, or as much of it as you need right now.',
-    'subscription.plan.free': 'Free',
-    'subscription.plan.monthly': 'Premium Monthly',
-    'subscription.plan.annual': 'Premium Annual',
+        'One trial, then the rate that matches what you do.',
+    'subscription.plan.trial': '7-day trial',
+    'subscription.plan.student': 'Student | Minorities',
+    'subscription.plan.professional': 'Professional',
     'subscription.perMonth': 'per month',
-    'subscription.perYear': 'per year',
-    'subscription.saving': 'Saves {amount} a year',
-    'subscription.recommended': 'BEST VALUE',
+    'subscription.perTrial': 'for 7 days',
+    'subscription.recommended': 'YOUR TIER',
     'subscription.current': 'Your plan',
     'subscription.cta.choose': 'Choose this plan',
     'subscription.cta.current': 'Current plan',
-    'subscription.compare': 'What each plan includes',
-    'subscription.premiumColumn': 'Premium',
+    'subscription.compare': 'What the trial opens',
+    'subscription.premiumColumn': 'Included',
+    'subscription.lockedColumn': 'Locked',
     'subscription.feature.coaching': 'AI coaching',
     'subscription.feature.coaching.free': 'Five messages a week',
     'subscription.feature.coaching.premium': 'Unlimited',
@@ -429,6 +489,16 @@ class AppStrings {
     'settings.item.biometric': 'Unlock with biometrics',
     'settings.item.plan': 'Your plan',
     'settings.item.managePlan': 'Manage plan',
+    'settings.section.succenergy': 'Succenergy',
+    'settings.item.recharge': 'Recharge with Succenergy',
+    'settings.item.library': 'Succenergy Library',
+    'settings.item.booking': 'Book Tânia Tomé',
+    'settings.item.connect': 'Connect with Us',
+    'settings.connect.instagram': 'Instagram',
+    'settings.connect.facebook': 'Facebook',
+    'settings.connect.linkedin': 'LinkedIn',
+    'settings.connect.youtube': 'YouTube',
+    'settings.external': 'Opens in your browser',
     'settings.item.help': 'Help and about',
     'settings.item.admin': 'Management console',
     'settings.item.logout': 'Log out',
@@ -487,9 +557,9 @@ class AppStrings {
     'admin.stat.sessions': 'SESSIONS 7D',
     'admin.users.search': 'Search users',
     'admin.users.plan': 'Plan',
-    'admin.users.planFree': 'Free',
-    'admin.users.planMonthly': 'Monthly',
-    'admin.users.planAnnual': 'Annual',
+    'admin.users.planTrial': 'Trial',
+    'admin.users.planStudent': 'Student',
+    'admin.users.planProfessional': 'Professional',
     'admin.users.lastSeen': 'Last seen',
     'admin.content.exercises': 'Exercise library',
     'admin.content.published': 'Published',
@@ -590,6 +660,24 @@ class AppStrings {
         'Sete perguntas e o seu coach saberá como trabalhar consigo.',
     'auth.field.name': 'Nome completo',
     'auth.field.email': 'Email',
+    'auth.field.dob': 'Data de nascimento',
+    'auth.field.country': 'País',
+    'auth.field.activity': 'Atividade',
+    'auth.hint.name': 'Tânia Tomé',
+    'auth.hint.email': 'taniatome@succenergy.com',
+    'auth.activity.student': 'Estudante | Minorias',
+    'auth.activity.professional': 'Profissional',
+    'auth.dob.placeholder': 'Escolha a sua data de nascimento',
+    'auth.dob.day': 'Dia',
+    'auth.dob.month': 'Mês',
+    'auth.dob.year': 'Ano',
+    'auth.country.placeholder': 'Escolha o seu país',
+    'auth.country.search': 'Procurar países',
+    'auth.country.empty': 'Nenhum país corresponde a isso.',
+    'auth.consent.terms': 'Aceito os termos e condições.',
+    'auth.consent.truth':
+        'Confirmo que toda a informação que indiquei é '
+        'verdadeira.',
     'auth.field.password': 'Palavra-passe',
     'auth.field.confirmPassword': 'Confirmar palavra-passe',
     'auth.action.login': 'Entrar',
@@ -603,6 +691,11 @@ class AppStrings {
     'auth.error.passwordRequired': 'Introduza a sua palavra-passe.',
     'auth.error.passwordShort': 'Use pelo menos 8 caracteres.',
     'auth.error.passwordMatch': 'As duas palavras-passe não coincidem.',
+    'auth.error.dobRequired': 'Introduza a sua data de nascimento.',
+    'auth.error.dobTooYoung':
+        'É preciso ter pelo menos 16 anos para se registar.',
+    'auth.error.countryRequired': 'Escolha o seu país.',
+    'auth.error.consentRequired': 'Marque as duas caixas antes de continuar.',
     'auth.forgot.title': 'Repor a palavra-passe',
     'auth.forgot.subtitle':
         'Introduza o email da sua conta e enviamos um link de reposição.',
@@ -665,6 +758,47 @@ class AppStrings {
     'onboarding.option.balance': 'Equilíbrio e recuperação',
     'onboarding.option.income': 'Crescer o rendimento',
     'onboarding.option.team': 'Construir uma equipa',
+    'onboarding.option.procrastination': 'Parar de procrastinar',
+    'onboarding.option.stress': 'Eliminar o stress',
+    'onboarding.option.balancedLife': 'Vida equilibrada',
+
+    // --- Entry quiz --------------------------------------------------------
+    'quiz.cta': 'Criar a sua conta',
+
+    // --- Trial -------------------------------------------------------------
+    'trial.eyebrow': 'Antes de começar',
+    'trial.title': 'Sete dias, um dólar',
+    'trial.subtitle':
+        'A aplicação é gratuita. O coach, os exercícios '
+        'e a sua evolução abrem no momento em que o teste '
+        'começa.',
+    'trial.after.label': 'Depois do teste',
+    'trial.after.value': '{price} por mês',
+    'trial.after.student':
+        'A mensalidade Estudante | Minorias, conforme escolheu no registo.',
+    'trial.after.professional':
+        'A mensalidade Profissional, conforme escolheu no registo.',
+    'trial.unlock.title': 'O que o teste abre',
+    'trial.unlock.coach': 'O Coach de IA, sem limite de mensagens',
+    'trial.unlock.exercises': 'Todos os exercícios dos sete princípios',
+    'trial.unlock.goals': 'Objetivos, ações e marcos',
+    'trial.unlock.progress': 'Toda a sua evolução e o histórico de ciclos',
+    'trial.unlock.library': 'Recarregue com a Succenergy e a biblioteca',
+    'trial.cta': 'Começar o teste de 7 dias',
+    'trial.smallPrint':
+        'Renova a {price} por mês depois de {days} dias. Cancele '
+        'quando quiser.',
+    'trialWelcome.eyebrow': 'Bem-vindo',
+    'trialWelcome.message':
+        'Parabéns, está no caminho para se tornar um vencedor '
+        'Succenergy.',
+
+    // --- Recharge ----------------------------------------------------------
+    'recharge.title': 'Recarregue com a Succenergy',
+    'recharge.eyebrow': 'Em breve',
+    'recharge.body':
+        'Uma pausa curta para fazer entre ciclos, sobre os mesmos sete '
+        'princípios. Está a ser preparada e vai abrir aqui.',
 
     // --- Dashboard ---------------------------------------------------------
     'dashboard.greeting.morning': 'Bom dia, {name}',
@@ -859,19 +993,19 @@ class AppStrings {
     // --- Subscription ------------------------------------------------------
     'subscription.title': 'Planos',
     'subscription.subtitle':
-        'A metodologia completa, ou a parte dela de que precisa agora.',
-    'subscription.plan.free': 'Gratuito',
-    'subscription.plan.monthly': 'Premium Mensal',
-    'subscription.plan.annual': 'Premium Anual',
+        'Um teste e, depois, a mensalidade que corresponde ao que faz.',
+    'subscription.plan.trial': 'Teste de 7 dias',
+    'subscription.plan.student': 'Estudante | Minorias',
+    'subscription.plan.professional': 'Profissional',
     'subscription.perMonth': 'por mês',
-    'subscription.perYear': 'por ano',
-    'subscription.saving': 'Poupa {amount} por ano',
-    'subscription.recommended': 'MELHOR VALOR',
+    'subscription.perTrial': 'durante 7 dias',
+    'subscription.recommended': 'O SEU PLANO',
     'subscription.current': 'O seu plano',
     'subscription.cta.choose': 'Escolher este plano',
     'subscription.cta.current': 'Plano atual',
-    'subscription.compare': 'O que cada plano inclui',
-    'subscription.premiumColumn': 'Premium',
+    'subscription.compare': 'O que o teste abre',
+    'subscription.premiumColumn': 'Incluído',
+    'subscription.lockedColumn': 'Bloqueado',
     'subscription.feature.coaching': 'Coaching por IA',
     'subscription.feature.coaching.free': 'Cinco mensagens por semana',
     'subscription.feature.coaching.premium': 'Sem limite',
@@ -927,6 +1061,16 @@ class AppStrings {
     'settings.item.biometric': 'Desbloquear com biometria',
     'settings.item.plan': 'O seu plano',
     'settings.item.managePlan': 'Gerir plano',
+    'settings.section.succenergy': 'Succenergy',
+    'settings.item.recharge': 'Recarregue com a Succenergy',
+    'settings.item.library': 'Biblioteca Succenergy',
+    'settings.item.booking': 'Marcar com a Tânia Tomé',
+    'settings.item.connect': 'Ligue-se a nós',
+    'settings.connect.instagram': 'Instagram',
+    'settings.connect.facebook': 'Facebook',
+    'settings.connect.linkedin': 'LinkedIn',
+    'settings.connect.youtube': 'YouTube',
+    'settings.external': 'Abre no seu navegador',
     'settings.item.help': 'Ajuda e sobre',
     'settings.item.admin': 'Consola de gestão',
     'settings.item.logout': 'Terminar sessão',
@@ -985,9 +1129,9 @@ class AppStrings {
     'admin.stat.sessions': 'SESSÕES 7D',
     'admin.users.search': 'Pesquisar utilizadores',
     'admin.users.plan': 'Plano',
-    'admin.users.planFree': 'Gratuito',
-    'admin.users.planMonthly': 'Mensal',
-    'admin.users.planAnnual': 'Anual',
+    'admin.users.planTrial': 'Teste',
+    'admin.users.planStudent': 'Estudante',
+    'admin.users.planProfessional': 'Profissional',
     'admin.users.lastSeen': 'Visto',
     'admin.content.exercises': 'Biblioteca de exercícios',
     'admin.content.published': 'Publicado',

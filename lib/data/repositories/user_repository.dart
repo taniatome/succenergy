@@ -17,6 +17,17 @@ abstract class UserRepository {
 
   Future<void> saveOnboardingResponse(OnboardingResponse response);
 
+  /// Stores the three answers given by the pre-registration quiz, merging
+  /// them into the assessment the post-registration questions complete.
+  ///
+  /// Kept separate from [saveOnboardingResponse] because the quiz runs before
+  /// an account exists and only knows about its own three answers.
+  Future<void> saveQuizAnswers({
+    required Map<String, String> ambition,
+    required List<String> focusAreaKeys,
+    required Map<String, String> challenge,
+  });
+
   /// The user's saved answers to the five Purpose prompts, keyed by prompt id.
   Future<Map<String, Map<String, String>>> loadPurposeAnswers();
 

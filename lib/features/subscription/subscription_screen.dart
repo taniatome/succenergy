@@ -10,12 +10,17 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/animated_reveal.dart';
 import '../../core/widgets/app_loader.dart';
 import '../../core/widgets/screen_background.dart';
+import '../../data/mock/mock_data.dart';
 import '../../data/models/subscription_plan.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/subscription_repository.dart';
 import 'widgets/feature_comparison_table.dart';
 import 'widgets/plan_card.dart';
 
-/// The three plan tiers and what each one includes.
+/// The trial and the two monthly rates, and what all three include.
+///
+/// The tier matching the activity chosen at registration is highlighted; the
+/// other monthly rate is shown but not pushed.
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
 
@@ -93,6 +98,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// The tier this account's registered activity puts it on.
+  SubscriptionTier get _activityTier =>
+      context.read<AuthRepository>().currentUser?.monthlyTier ??
+      SubscriptionTier.professional;
+
   List<Widget> _sections(BuildContext context) {
     return <Widget>[
       AnimatedReveal(
@@ -111,6 +121,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           child: PlanCard(
             plan: _plans[i],
             isCurrent: _plans[i].tier == _current,
+            highlighted: _plans[i].tier == _activityTier,
             onSelect: () => _select(_plans[i].tier),
           ),
         ),
@@ -121,12 +132,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         index: 4,
         child: FeatureComparisonTable(
           featureKeys: _featureKeys,
-          free: _plans.firstWhere(
-            (SubscriptionPlan p) => p.tier == SubscriptionTier.free,
-          ),
-          premium: _plans.firstWhere(
-            (SubscriptionPlan p) => p.tier == SubscriptionTier.annual,
-          ),
+          lockedValueKeys: MockData.lockedFeatureValueKeys,
+          includedValueKeys: MockData.includedFeatureValueKeys,
         ),
       ),
       const SizedBox(height: AppSpacing.md),

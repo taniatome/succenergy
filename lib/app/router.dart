@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../core/localization/string_extensions.dart';
 import '../core/motion/page_transitions.dart';
-import '../core/widgets/app_bottom_nav.dart';
-import '../core/widgets/icons/app_icon.dart';
 import '../data/repositories/coach_repository.dart';
 import '../data/repositories/exercises_repository.dart';
 import '../data/repositories/goals_repository.dart';
@@ -37,11 +34,18 @@ import '../features/profile/profile_screen.dart';
 import '../features/progress/progress_screen.dart';
 import '../features/purpose/purpose_provider.dart';
 import '../features/purpose/purpose_screen.dart';
+import '../features/quiz/quiz_provider.dart';
+import '../features/quiz/quiz_screen.dart';
+import '../features/recharge/recharge_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/subscription/subscription_screen.dart';
+import '../features/trial/trial_screen.dart';
+import '../features/trial/trial_welcome_screen.dart';
 import '../features/welcome/welcome_screen.dart';
 import 'routes.dart';
+import 'shell_frame.dart';
+import 'subscription_gate.dart';
 
 /// The app's complete route table.
 ///
@@ -55,13 +59,17 @@ class AppRouter {
   static GoRouter build() {
     return GoRouter(
       initialLocation: Routes.splash,
+      redirect: SubscriptionGate.redirect,
       routes: <RouteBase>[
         _page(Routes.splash, (_) => const SplashScreen()),
         _page(Routes.welcome, (_) => const WelcomeScreen()),
         _page(Routes.language, (_) => const LanguageSelectionScreen()),
+        _page(Routes.quiz, _quiz),
         _page(Routes.login, (_) => const LoginScreen()),
         _page(Routes.register, (_) => const RegisterScreen()),
         _page(Routes.forgotPassword, (_) => const ForgotPasswordScreen()),
+        _page(Routes.trial, (_) => const TrialScreen()),
+        _page(Routes.trialWelcome, (_) => const TrialWelcomeScreen()),
         _page(Routes.onboarding, _onboarding),
         _shell(),
         _page(Routes.purpose, _purpose, rise: true),
@@ -77,6 +85,7 @@ class AppRouter {
           rise: true,
         ),
         _page(Routes.settings, (_) => const SettingsScreen(), rise: true),
+        _page(Routes.recharge, (_) => const RechargeScreen(), rise: true),
         _page(Routes.help, (_) => const HelpAboutScreen(), rise: true),
         _page(Routes.adminGate, (_) => const AdminGateScreen(), rise: true),
         _page(
@@ -128,6 +137,15 @@ class AppRouter {
     );
   }
 
+  static Widget _quiz(BuildContext context) {
+    return ChangeNotifierProvider<QuizProvider>(
+      create:
+          (BuildContext context) =>
+              QuizProvider(context.read<UserRepository>()),
+      child: const QuizScreen(),
+    );
+  }
+
   static Widget _onboarding(BuildContext context) {
     return ChangeNotifierProvider<OnboardingProvider>(
       create:
@@ -175,7 +193,7 @@ class AppRouter {
         GoRouterState state,
         StatefulNavigationShell shell,
       ) {
-        return _ShellFrame(shell: shell);
+        return ShellFrame(shell: shell);
       },
       branches: <StatefulShellBranch>[
         StatefulShellBranch(
@@ -256,44 +274,6 @@ class AppRouter {
                     ),
                     state: state,
                   ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Wraps the five main destinations with the persistent navigation bar.
-class _ShellFrame extends StatelessWidget {
-  const _ShellFrame({required this.shell});
-
-  final StatefulNavigationShell shell;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        Expanded(child: shell),
-        AppBottomNav(
-          currentIndex: shell.currentIndex,
-          onSelect:
-              (int index) => shell.goBranch(
-                index,
-                initialLocation: index == shell.currentIndex,
-              ),
-          labels: <String>[
-            context.tr('nav.home'),
-            context.tr('nav.goals'),
-            context.tr('nav.coach'),
-            context.tr('nav.exercises'),
-            context.tr('nav.progress'),
-          ],
-          marks: const <AppIconMark>[
-            AppIconMark.cycle,
-            AppIconMark.target,
-            AppIconMark.signal,
-            AppIconMark.steps,
-            AppIconMark.rise,
-          ],
         ),
       ],
     );

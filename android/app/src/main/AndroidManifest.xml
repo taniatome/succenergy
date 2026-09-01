@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Asked for once, on first entry to the app after onboarding. Messaging
+         itself is not wired yet; this is what lets the system prompt appear
+         on Android 13 and above. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="succenergy_ai_coach"
         android:name="${applicationName}"
@@ -40,6 +45,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Required on Android 11 and above so the Settings links can open a
+             browser: the Succenergy Library, booking and the social pages. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

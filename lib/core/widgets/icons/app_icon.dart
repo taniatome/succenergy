@@ -33,6 +33,13 @@ enum AppIconMark {
 
   /// Profile. Head and shoulders, drawn as circle and arc.
   person,
+
+  /// Settings. Three dots stacked vertically: the kebab menu, drawn on the
+  /// same grid as its neighbours instead of borrowed from Material.
+  kebab,
+
+  /// A chevron pointing down, for a row that expands in place.
+  chevronDown,
 }
 
 /// Draws one of the app's own icon marks.

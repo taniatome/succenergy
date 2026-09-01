@@ -6,23 +6,27 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/cards/glow_card.dart';
 import '../../../core/widgets/section_eyebrow.dart';
-import '../../../data/models/subscription_plan.dart';
 
-/// Feature-by-feature comparison of the free and premium levels.
+/// Feature-by-feature comparison of what an account reaches before the trial
+/// against what every plan includes.
 ///
-/// Premium is one column because the monthly and annual plans include exactly
-/// the same thing; only the price differs.
+/// One included column, because the trial and both monthly rates carry
+/// exactly the same thing; only the price differs.
 class FeatureComparisonTable extends StatelessWidget {
   const FeatureComparisonTable({
     required this.featureKeys,
-    required this.free,
-    required this.premium,
+    required this.lockedValueKeys,
+    required this.includedValueKeys,
     super.key,
   });
 
   final List<String> featureKeys;
-  final SubscriptionPlan free;
-  final SubscriptionPlan premium;
+
+  /// Feature key to the value key describing the locked level.
+  final Map<String, String> lockedValueKeys;
+
+  /// Feature key to the value key describing the included level.
+  final Map<String, String> includedValueKeys;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +56,7 @@ class FeatureComparisonTable extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Text(
-              context.tr(free.nameKey).toUpperCase(),
+              context.tr('subscription.lockedColumn').toUpperCase(),
               style: AppTypography.metricLabel,
               textAlign: TextAlign.right,
             ),
@@ -93,7 +97,7 @@ class FeatureComparisonTable extends StatelessWidget {
               Expanded(
                 flex: 3,
                 child: Text(
-                  context.tr(free.featureValueKeys[featureKey] ?? featureKey),
+                  context.tr(lockedValueKeys[featureKey] ?? featureKey),
                   style: AppTypography.caption,
                   textAlign: TextAlign.right,
                 ),
@@ -102,9 +106,7 @@ class FeatureComparisonTable extends StatelessWidget {
               Expanded(
                 flex: 3,
                 child: Text(
-                  context.tr(
-                    premium.featureValueKeys[featureKey] ?? featureKey,
-                  ),
+                  context.tr(includedValueKeys[featureKey] ?? featureKey),
                   style: AppTypography.caption.copyWith(
                     color: AppColors.textPrimary,
                   ),

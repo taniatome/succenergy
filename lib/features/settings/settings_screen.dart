@@ -15,6 +15,7 @@ import '../../data/models/subscription_plan.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/subscription_repository.dart';
 import 'widgets/settings_group.dart';
+import 'widgets/succenergy_links_group.dart';
 
 /// Grouped settings, from language through to deleting the account.
 class SettingsScreen extends StatefulWidget {
@@ -179,8 +180,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       const SizedBox(height: AppSpacing.lg),
+      const AnimatedReveal(index: 4, child: SuccenergyLinksGroup()),
+      const SizedBox(height: AppSpacing.lg),
       AnimatedReveal(
-        index: 4,
+        index: 5,
         child: SettingsGroup(
           title: context.tr('settings.section.about'),
           rows: <Widget>[
@@ -197,7 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       const SizedBox(height: AppSpacing.lg),
       AnimatedReveal(
-        index: 5,
+        index: 6,
         child: SettingsGroup(
           title: context.tr('settings.section.account'),
           rows: <Widget>[
@@ -218,12 +221,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _planKey(SubscriptionTier tier) {
     switch (tier) {
-      case SubscriptionTier.free:
-        return 'subscription.plan.free';
-      case SubscriptionTier.monthly:
-        return 'subscription.plan.monthly';
-      case SubscriptionTier.annual:
-        return 'subscription.plan.annual';
+      case SubscriptionTier.trial:
+        return 'subscription.plan.trial';
+      case SubscriptionTier.student:
+        return 'subscription.plan.student';
+      case SubscriptionTier.professional:
+        return 'subscription.plan.professional';
     }
   }
 }

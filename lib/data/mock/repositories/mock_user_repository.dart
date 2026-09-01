@@ -48,6 +48,20 @@ class MockUserRepository implements UserRepository {
   }
 
   @override
+  Future<void> saveQuizAnswers({
+    required Map<String, String> ambition,
+    required List<String> focusAreaKeys,
+    required Map<String, String> challenge,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    _response = _response.copyWith(
+      ambition: ambition,
+      focusAreaKeys: focusAreaKeys,
+      challenge: challenge,
+    );
+  }
+
+  @override
   Future<Map<String, Map<String, String>>> loadPurposeAnswers() async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     return Map<String, Map<String, String>>.unmodifiable(_purposeAnswers);

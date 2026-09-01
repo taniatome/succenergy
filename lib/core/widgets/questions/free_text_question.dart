@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/constants/app_constants.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/inputs/app_text_field.dart';
+import '../../constants/app_constants.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_typography.dart';
+import '../inputs/app_text_field.dart';
 
 /// An assessment question answered in the user's own words.
 class FreeTextQuestion extends StatefulWidget {

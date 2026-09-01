@@ -554,3 +554,196 @@ Stated plainly.
 10. **The onboarding closing summary still shows five of seven answers.** `onboarding_summary.dart` has the same gap Profile had. The brief named `coaching_profile_section.dart` only, so I fixed that one. The two new keys are in place if you want the summary brought in line.
 
 11. **Out-of-scope items were left alone, as instructed** — `MockProgressRepository` still reads static seed data, Admin's visual distinction is unchanged, `mock_data.dart` and `app_strings.dart` were not split, the four hand-rolled `initState`/`_load` screens were not refactored, and the dead Terms/Privacy links and the PT typo at `mock_data.dart:1296` are still there.
+
+---
+
+# CLIENT FEEDBACK ROUND 1
+
+**Date:** 2026-09-01
+**Scope:** the ten items in the round-1 revision brief. Frontend only, still on mock data. No backend, no payment SDK, no audio, no Firebase.
+**State:** `flutter analyze` clean. `flutter test` 7/7 green (was 4/4; three tests added, two rewritten for the new flow). Debug APK builds.
+
+**New flow, end to end:**
+
+```
+Splash → Welcome → Language → Quiz (3 questions) → Register → Trial → Welcome moment → Onboarding (4 questions) → Dashboard
+```
+
+---
+
+## Part 1 — What changed, file by file
+
+### Item 1 — Registration: date of birth, country, activity, two consents, email placeholder
+
+| File | Change |
+|---|---|
+| [register_screen.dart](lib/features/auth/register_screen.dart) | Rewritten. Holds date of birth, country code, activity and both consent flags; validates all seven fields; registers with the new signature and continues to `Routes.trial`. 220 lines, `build()` 9 |
+| [widgets/register_identity_fields.dart](lib/features/auth/widgets/register_identity_fields.dart) | **New.** The three non-typed fields (date of birth, country, activity) and the sheets they open |
+| [widgets/selector_field.dart](lib/features/auth/widgets/selector_field.dart) | **New.** A field that opens a sheet instead of taking typing — same eyebrow, fill, radius and hairline as `AppTextField`, so it reads as a form field |
+| [widgets/dob_picker_sheet.dart](lib/features/auth/widgets/dob_picker_sheet.dart) | **New.** Three-wheel date picker on the navy sheet. Not `showDatePicker`. Years offered run from 16 to 100 years ago, so the picker cannot express an under-16 date; the form still checks the age |
+| [widgets/dob_wheel.dart](lib/features/auth/widgets/dob_wheel.dart) | **New.** One wheel column: selected row held in a gold band, app type throughout. Month names come from the active locale through `intl`, not from 12 more string keys |
+| [widgets/country_picker_sheet.dart](lib/features/auth/widgets/country_picker_sheet.dart) | **New.** Full country list, filtered as you type, matched against **both** language names so "Moza" finds Moçambique in Portuguese |
+| [widgets/activity_selector.dart](lib/features/auth/widgets/activity_selector.dart) | **New.** Student \| Minorities / Professional, on the existing `PreferenceChoiceRow` |
+| [widgets/consent_block.dart](lib/features/auth/widgets/consent_block.dart) | **New.** Two separate checkboxes and the shared error line |
+| [core/widgets/inputs/app_checkbox.dart](lib/core/widgets/inputs/app_checkbox.dart) | **New.** Drawn checkbox — gold fill, resting bloom, tick on the same 24-unit grid as the icon marks. Whole row is the target |
+| [data/models/country.dart](lib/data/models/country.dart) | **New.** `Country(code, en, pt)` |
+| [data/mock/country_data.dart](lib/data/mock/country_data.dart) | **New.** 196 countries with Portuguese names, sorted at read time against the active language |
+| [data/models/user.dart](lib/data/models/user.dart) | `UserActivity` enum, plus `activity`, `dateOfBirth`, `countryCode` and a `monthlyTier` getter |
+| [data/repositories/auth_repository.dart](lib/data/repositories/auth_repository.dart) | `register(...)` now takes date of birth, country and activity; added `hasActiveSubscription` and `startTrial()` |
+| [login_screen.dart](lib/features/auth/login_screen.dart), [forgot_password_screen.dart](lib/features/auth/forgot_password_screen.dart) | Email hint now `taniatome@succenergy.com`, read from `auth.hint.email` instead of a literal in the widget |
+
+### Item 2 — Sign-in button weight
+
+| File | Change |
+|---|---|
+| [welcome_screen.dart](lib/features/welcome/welcome_screen.dart) | "I already have an account" is a full-width `SecondaryButton` directly under the primary. The primary is now the gold-filled `PrimaryButton` — see deviation 1 |
+| [core/widgets/buttons/primary_button.dart](lib/core/widgets/buttons/primary_button.dart) | Optional `emphasis`: one word of the label at heavier weight, so the CTA keeps its stressed word on a gold fill |
+| [core/widgets/buttons/secondary_button.dart](lib/core/widgets/buttons/secondary_button.dart) | Height 56 → 54, so the pair is exactly the same size |
+
+### Item 3 — Pre-registration quiz (split 7 → 3 + 4)
+
+| File | Change |
+|---|---|
+| [features/quiz/quiz_provider.dart](lib/features/quiz/quiz_provider.dart) | **New.** Holds the three answers, writes them through `UserRepository.saveQuizAnswers` |
+| [features/quiz/quiz_screen.dart](lib/features/quiz/quiz_screen.dart) | **New.** Same treatment as onboarding: progress rule, one question per screen, `AnimatedSwitcher` between steps. Reuses the existing question widgets and the existing `onboarding.q1–q3` copy, so nothing was re-translated |
+| [core/widgets/questions/](lib/core/widgets/questions/) | **Moved** (git-tracked renames) — `free_text_question.dart`, `multi_select_question.dart`, `scale_question.dart` and `onboarding_progress_bar.dart` → `question_progress_bar.dart`. They are now shared by two features, and a cross-feature import would have broken the layering rule |
+| [onboarding_provider.dart](lib/features/onboarding/onboarding_provider.dart) | Four questions (priorities, main goals, motivation, success). Reads the three quiz answers into the draft on construction so the closing summary shows the whole assessment, and merges them again on `save()` so a slow first read can never write three empty fields over them |
+| [onboarding_screen.dart](lib/features/onboarding/onboarding_screen.dart) | Four steps, explicit key mapping (`q4`–`q7`), progress out of 4 |
+| [app/routes.dart](lib/app/routes.dart), [app/router.dart](lib/app/router.dart) | `Routes.quiz` with its provider |
+| [language_selection_screen.dart](lib/features/language_selection/language_selection_screen.dart) | Confirm now opens the quiz, not registration. `build()` split so it stays under 60 lines |
+
+### Item 4 — Three more options on the life-area question
+
+`onboarding.option.procrastination`, `onboarding.option.stress`, `onboarding.option.balancedLife` in both languages, added to `QuizProvider.focusAreaOptions` (ten options now). Maximum of two selections unchanged.
+
+### Item 5 — Trial screen (UI only)
+
+| File | Change |
+|---|---|
+| [features/trial/trial_screen.dart](lib/features/trial/trial_screen.dart) | **New.** $1 for 7 days, one monthly rate, what the trial opens, CTA, small print. The CTA calls `AuthRepository.startTrial()` — a flag, no SDK, no network |
+| [features/trial/widgets/trial_offer_card.dart](lib/features/trial/widgets/trial_offer_card.dart) | **New.** Gradient-border offer card. Shows **only** the rate the registered activity puts the user on |
+| [features/trial/widgets/trial_unlock_list.dart](lib/features/trial/widgets/trial_unlock_list.dart) | **New.** Five lines, gold nodes rather than tick glyphs |
+| [app/subscription_gate.dart](lib/app/subscription_gate.dart) | **New.** The router's `redirect`. Signed in without the flag → every gated path resolves to `Routes.trial`, onboarding included. One check, in one place; no screen asks |
+| [mock_auth_repository.dart](lib/data/mock/repositories/mock_auth_repository.dart) | Registration leaves the flag false; `startTrial()` sets it; log-out and delete clear it. A returning **log-in** sets it true, so the demo persona still opens on the Dashboard |
+| [app/shell_frame.dart](lib/app/shell_frame.dart) | **New.** `_ShellFrame` moved out of `router.dart` — see deviation 7 |
+
+### Item 6 — Post-payment welcome moment
+
+| File | Change |
+|---|---|
+| [features/trial/trial_welcome_screen.dart](lib/features/trial/trial_welcome_screen.dart) | **New.** The client's exact line over a gold bloom, one way on. Reached once, from the trial action |
+| [features/trial/widgets/welcome_bloom.dart](lib/features/trial/widgets/welcome_bloom.dart) | **New.** The goal-completion gesture reused: one ring of light expands from behind the mark and settles, ~720ms on the celebrate curve. Reduced motion goes straight to the settled state |
+
+Copy, both languages:
+- EN "Congratulations, you are on the path to becoming a Succenergy winner."
+- PT "Parabéns, está no caminho para se tornar um vencedor Succenergy."
+
+### Item 7 — Subscription pricing
+
+| File | Change |
+|---|---|
+| [data/models/subscription_plan.dart](lib/data/models/subscription_plan.dart) | `SubscriptionTier` is now `{ trial, student, professional }`. `annualSaving` and `isPremium` removed |
+| [mock_data.dart](lib/data/mock/mock_data.dart) | Three plans: $1 / 7 days, $11 / month, $33 / month. Prices read from `AppConstants`. Added `lockedFeatureValueKeys` and `includedFeatureValueKeys` |
+| [widgets/plan_card.dart](lib/features/subscription/widgets/plan_card.dart) | `highlighted` replaces the data-level `isRecommended`: the tier matching the registered activity is the one card with the gradient edge and the filled action. Saving flag gone |
+| [subscription_screen.dart](lib/features/subscription/subscription_screen.dart) | Reads the activity from the account and highlights that tier |
+| [widgets/feature_comparison_table.dart](lib/features/subscription/widgets/feature_comparison_table.dart) | Same rows, same treatment; the two columns are now LOCKED / INCLUDED instead of Free / Premium — see deviation 4 |
+| [widgets/admin_user_row.dart](lib/features/admin/widgets/admin_user_row.dart), [settings_screen.dart](lib/features/settings/settings_screen.dart) | Tier labels follow the new three |
+
+### Item 8 — Kebab menu and new Settings items
+
+| File | Change |
+|---|---|
+| [core/widgets/icons/app_icon.dart](lib/core/widgets/icons/app_icon.dart), [app_icon_painter.dart](lib/core/widgets/icons/app_icon_painter.dart) | Two new marks on the same 24-unit grid: `kebab` (three dots, vertical) and `chevronDown` (used by the selector fields) |
+| [widgets/greeting_header.dart](lib/features/dashboard/widgets/greeting_header.dart) | The settings affordance is the kebab. Vertical dots — the header row is three circles side by side and a horizontal kebab would have read as an ellipsis in a line of them |
+| [features/settings/widgets/succenergy_links_group.dart](lib/features/settings/widgets/succenergy_links_group.dart) | **New.** Recharge with Succenergy (in-app), Succenergy Library, Book Tânia Tomé, Connect with Us (expands in place to Instagram / Facebook / LinkedIn / YouTube). External rows carry "Opens in your browser" |
+| [features/recharge/recharge_screen.dart](lib/features/recharge/recharge_screen.dart) | **New.** Placeholder screen, says plainly that it is being prepared |
+| [core/services/external_links.dart](lib/core/services/external_links.dart) | **New.** The one `url_launcher` call in the project. A destination that cannot be opened returns false rather than throwing |
+| [app_constants.dart](lib/core/constants/app_constants.dart) | Six URLs, every one named `placeholder…` and marked as unconfirmed in the comment |
+| [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml), [Info.plist](ios/Runner/Info.plist) | `<queries>` for `https` on Android 11+, `LSApplicationQueriesSchemes` on iOS — without these the links silently do nothing |
+
+### Item 9 — Welcome logo and background
+
+| File | Change |
+|---|---|
+| [welcome_screen.dart](lib/features/welcome/welcome_screen.dart) | Restructured: the brand block (symbol, lockup, tagline, authorship) is centred in the space above the actions via `SliverFillRemaining`, and scrolls only when the screen is too short. The actions sit above the curve, clearing it by the same fraction the painter uses, so they can never sit on the horizon at any screen size |
+| [widgets/starfield_painter.dart](lib/features/welcome/widgets/starfield_painter.dart) | **New.** 110 deterministic points above the horizon, dimming as they approach it, every ninth held brighter and larger. No twinkle |
+| [widgets/earth_glow_painter.dart](lib/features/welcome/widgets/earth_glow_painter.dart) | Rewritten in five passes: a four-stop body gradient, a wide outer haze, a tighter halo, the hard rim, and a **light wrap clipped inside the circle** so the glow fades along the curve rather than across a straight edge. The peak carries two blooms (off-white core, blue spill) plus the beam. `horizonFraction` is now public, which is what the screen reads to clear the curve |
+| Ambient drift | A 18-second controller slides the sunrise a fraction of the screen width and breathes its intensity. Stopped entirely under reduced motion |
+
+### Item 10 — Notification permission
+
+| File | Change |
+|---|---|
+| [core/services/notification_permission.dart](lib/core/services/notification_permission.dart) | **New.** One-shot request, outcome recorded, safe on a platform with no plugin behind it |
+| [onboarding_screen.dart](lib/features/onboarding/onboarding_screen.dart) | Fires on "Enter the app" — first entry after onboarding. Not awaited: the system dialog sits over the Dashboard on its own |
+| [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml) | `POST_NOTIFICATIONS`, without which nothing appears on Android 13+ |
+
+### Supporting changes
+
+| File | Change |
+|---|---|
+| [core/localization/app_strings.dart](lib/core/localization/app_strings.dart) | **62 keys added, 8 removed** per language: 412 → **466 each**, sets identical. Removed: the three old plan names, `perYear`, `saving`, the three old admin plan labels |
+| [core/localization/string_extensions.dart](lib/core/localization/string_extensions.dart) | Added `context.trRead` — see deviation 9, this fixes a real crash |
+| [core/constants/app_constants.dart](lib/core/constants/app_constants.dart) | `quizQuestionCount` 3, `onboardingQuestionCount` 7 → 4, `minimumAgeYears`, `maxAgeYears`, the four prices, the six placeholder URLs |
+| [user_repository.dart](lib/data/repositories/user_repository.dart) + mock | `saveQuizAnswers(...)`, which merges the three answers into the stored assessment |
+| [pubspec.yaml](pubspec.yaml) | `url_launcher ^6.3.2`, `permission_handler ^11.3.1` — see deviation 10 |
+| [test/journey_test.dart](test/journey_test.dart) | Rewritten for the new flow, plus three new tests |
+| [test/widget_test.dart](test/widget_test.dart) | Reduced motion (the Welcome drift is continuous now and the tree would never settle) and a rich-text finder for the CTA |
+
+---
+
+## Part 2 — Checks
+
+| # | Check | Result |
+|---|---|---|
+| 1 | `flutter analyze` | **Clean**, whole project |
+| 2 | Full flow cold-start | **Yes** — driven end to end by `splash through quiz, trial and onboarding into the dashboard`: Welcome → Language → Quiz ×3 → Register (both sheets, both checkboxes) → Trial → welcome moment → Onboarding ×4 → summary → Dashboard |
+| 3 | All seven answers survive the split | **Yes** — `the quiz answers reach the closing summary` asserts the three quiz answers appear on the closing summary beside the four just given. Profile renders all seven fields of `OnboardingResponse` and the store holds all seven after both writes |
+| 4 | Registration blocks until both boxes are ticked | **Yes** — the test submits with them unticked, asserts the error, then ticks both and submits. See deviation 5 for why it is an error rather than a disabled button |
+| 5 | $11 for Student \| Minorities, $33 for Professional | **Yes, both ways** — the professional path asserts `$33`, the student path asserts `$11` **and** that `$33` appears nowhere |
+| 6 | Subscription screen on the new model | **Yes** — three tiers, no annual, no saving flag, gradient edge on the activity's tier |
+| 7 | Authenticated + no flag cannot reach the Dashboard | **Yes** — `the dashboard is closed until the trial is taken` registers, then drives the real router to `/dashboard`, `/coach` and `/progress` and asserts the trial screen each time |
+| 8 | Settings via the kebab; four new items; links | **Partly by test** — `the kebab menu opens Settings and the Succenergy links` taps the kebab mark, asserts all four items, expands Connect with Us and routes into Recharge. That a browser actually opens is **not** verified — see deviation 11 |
+| 9 | EN/PT key sets identical | **Yes** — 466 each, zero missing either direction, zero duplicates |
+| 10 | No new hex, `Colors.*`, emoji or non-glow shadow | **Yes** — zero hex outside `app_colors.dart`, zero `Colors.*`, every `BoxShadow(` still inside `app_shadows.dart`, and the only non-ASCII in `lib/` is em-dashes, Portuguese accents and the `·` separator (checked by codepoint) |
+| 11 | Touched files ≤250 lines, `build()` ≤60 | **Yes for every new file** and for everything I touched except three pre-existing exceptions — see deviation 7 |
+| 12 | Android debug build | **Builds** after pinning `permission_handler` — see deviation 10 |
+| 13 | Looked at | Welcome (390×844 and 360×720), Trial and the welcome moment were **rendered to PNG and inspected**. That is how the button/horizon overlap in deviation 3 was found and fixed |
+
+---
+
+## Part 3 — Deviations, and what I could not do as specified
+
+Stated plainly.
+
+1. **The Welcome CTA is now gold-filled, which changes the approved artwork.** The brief says "the primary stays gold-filled". It was not gold-filled — it was the glowing outlined button from the reference artwork, and both actions outlined would have left no hierarchy. I followed the brief: the CTA is a filled `PrimaryButton`, sign-in is the outlined `SecondaryButton`. Consequence: the stressed word "Journey" can no longer be gold on a gold fill, so it now carries a heavier weight in navy instead. If you want the artwork treatment back, it is a two-line swap in `welcome_screen.dart`.
+
+2. **"Exo 2" is not in this project.** The brief asked for the date picker to be themed in Exo 2. The type system has been Poppins since the earlier pass (`app_typography.dart`); there is no Exo 2 anywhere in the build. The picker uses the app's own scale.
+
+3. **`design_reference/welcome_screen_reference.png` is not in the repository.** The background was deepened against the brief's description and the existing painter, not against the image. If the file exists on your side, send it — the atmosphere is tuned by a handful of alpha values and is quick to adjust.
+
+4. **The comparison table's columns are now LOCKED / INCLUDED.** The brief said to keep the comparison rows, but under the new model the trial and both monthly rates include exactly the same thing, so a trial-versus-monthly table would have been two identical columns. The left column now describes what an account reaches *before* the trial — which is the honest comparison and reuses the existing copy unchanged.
+
+5. **Registration blocks with an error, not a disabled button.** Tapping "Create account" with either box unticked shows "Tick both boxes before you continue." under the checkboxes and does not register. A disabled button would have hidden the reason. Say the word if you want the button greyed out as well.
+
+6. **The welcome moment sits between the trial and onboarding, not on the Dashboard.** Item 6 says it "dismisses to the Dashboard"; the flow in the brief's verification list puts it directly after the trial. I followed the flow: it dismisses into the four onboarding questions, which land on the Dashboard. Moving it to a first-entry Dashboard overlay is a route change plus one flag.
+
+7. **Three files remain over 250 lines and three `build()`s over 60.** `router.dart` is 281 — but it was **301 before this pass**: the shell widget and the gate moved out, so it is twenty lines shorter than I found it. `app_strings.dart` (1,149) and `mock_data.dart` (1,766) were explicitly out of scope to split. The three long `build()`s are in `admin_gate_screen.dart`, `exercise_card.dart` and `onboarding_summary.dart` — none of which I touched.
+
+8. **Country names live in `country_data.dart`, not `app_strings.dart`.** Both languages are there, so nothing is untranslated, but 196 rows × 2 would have doubled the string file and buried the written copy. The brief's rule is that no *widget* holds display text; no widget does.
+
+9. **I fixed a real crash on the way through.** Every validator resolved its error message with `context.tr`, which is a `watch`, from inside a tap handler — provider asserts on that. Any validation failure on register, log in or forgot-password would have thrown. It never showed up because the happy path never resolves an error string; my consent error hit it on the first run. Added `context.trRead` (read-based) and used it in the three validators. This is a fix you did not ask for, in files you did ask me to change.
+
+10. **`permission_handler` is pinned to 11.3.1, not the latest.** Version 13 pulls an Android module that requires Kotlin 2.3 and `compileSdk 37`; this project is on Kotlin 1.8.22, AGP 8.7 and Flutter 3.29's SDK 35, so the Gradle script failed to compile. Raising the toolchain is a build-system change, not a frontend one, so I pinned the plugin instead and confirmed the debug APK builds. Worth revisiting when the project moves to a newer Flutter.
+
+11. **The native prompt and the external links have not been seen working.** No device was involved: `POST_NOTIFICATIONS` and the `https` query are in the manifest and the request fires at the right moment, but nobody has watched the dialog appear, and a widget test cannot open a browser. Both need five minutes on a real phone.
+
+12. **The trial and Plans screens read the activity from the auth repository**, while the Dashboard and Profile read the user repository's persona. That split already existed; it now matters for pricing, because after a **log-in** (rather than a registration) the persona's activity — Professional — is what drives the highlighted tier. One store, later, when the backend lands.
+
+13. **`SecondaryButton` is 2px shorter everywhere.** Height 56 → 54 so the Welcome pair matches exactly. It affects every secondary button in the app.
+
+14. **The wordmark's baked-in navy panel is slightly more visible than before.** The artwork has a solid panel behind it, and against a starfield its top and bottom edges hide stars. A transparent PNG or an SVG of the lockup would remove it — worth asking the design side for.
+
+15. **The onboarding closing summary still shows five of seven answers** (main goals and motivation are missing). Same gap flagged last round; the split did not change it, and the two keys are already in place if you want it brought in line.
+
+16. **Out of scope, untouched, as instructed:** no audio, no payment SDK, no quiz landing page, no backend or Firebase, `MockProgressRepository` still reads seed data, and neither `mock_data.dart` nor `app_strings.dart` was split.

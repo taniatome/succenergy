@@ -9,9 +9,9 @@ import '../../theme/app_typography.dart';
 
 /// The glowing outline action button.
 ///
-/// The Welcome call to action and every secondary action across the app.
-/// [useAiAccent] switches the outline and bloom to AI Blue, and is reserved
-/// for actions that open or continue the AI Coach.
+/// Sits beneath the filled gold action at the same width and height, so the
+/// two read as one pair. [useAiAccent] switches the outline and bloom to AI
+/// Blue, and is reserved for actions that open or continue the AI Coach.
 class SecondaryButton extends StatefulWidget {
   const SecondaryButton({
     required this.label,
@@ -66,7 +66,7 @@ class _SecondaryButtonState extends State<SecondaryButton> {
           duration: AppDurations.fast,
           curve: AppCurves.stateChange,
           width: widget.expand ? double.infinity : null,
-          height: 56,
+          height: 54,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           decoration: BoxDecoration(
             color: AppColors.navyDeep.withValues(alpha: 0.45),
