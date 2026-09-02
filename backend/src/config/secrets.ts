@@ -58,7 +58,9 @@ export async function getSecret(key: SecretKey, version = 'latest'): Promise<str
   }
 
   if (isEmulated) {
-    const local = process.env[`SECRET_${key}`];
+    // String() rather than interpolating `key` directly: with an empty
+    // registry SecretKey is `never`, which is not a valid template operand.
+    const local = process.env[`SECRET_${String(key)}`];
     if (local !== undefined && local.trim() !== '') {
       cache.set(cacheKey, local);
       return local;
