@@ -747,3 +747,214 @@ Stated plainly.
 15. **The onboarding closing summary still shows five of seven answers** (main goals and motivation are missing). Same gap flagged last round; the split did not change it, and the two keys are already in place if you want it brought in line.
 
 16. **Out of scope, untouched, as instructed:** no audio, no payment SDK, no quiz landing page, no backend or Firebase, `MockProgressRepository` still reads seed data, and neither `mock_data.dart` nor `app_strings.dart` was split.
+
+---
+
+# Backend Deploy Pass
+
+Three tasks: move first-contact registration off query parameters, deploy to
+Cloud Run, and correct the subscription schema for RevenueCat. Two are done.
+The deploy is not, and could not be from this machine — [what could not be
+done](#what-could-not-be-done) says exactly why.
+
+`npm run build`, `npm run lint` and `npm run typecheck` are all clean.
+
+---
+
+## Task 1 — First-contact registration moved to `POST /v1/me`
+
+`GET /v1/me` accepted `name`, `preferredLanguage`, `activity`, `dateOfBirth`,
+`countryCode`, `acceptedTerms` and `confirmedInfoTrue` as **query parameters**
+and created the user document when the uid was unknown. Two problems, both
+real:
+
+- **Cloud Run writes the full request URL to its platform request log, query
+  string included.** That happens below the application, so
+  `request_logger.ts` redaction cannot reach it — name, date of birth and
+  country would have gone into Cloud Logging on every first-contact request.
+  Against the brief's *"do not expose private user information through logs,
+  public APIs or debug output."* Request bodies are not logged.
+- **A `GET` that creates a resource is neither safe nor idempotent.** Retries,
+  prefetches and intermediaries all assume a `GET` has no side effects.
+
+| File | Change |
+| --- | --- |
+| [backend/src/schemas/user.schema.ts](backend/src/schemas/user.schema.ts) | `bootstrapProfileSchema` → `createProfileSchema`, parsed from the body. `acceptedTerms` / `confirmedInfoTrue` are now `boolean` rather than `literal(true)`, so a recorded refusal is a valid request rather than a malformed one. `.strict()`, so unknown keys are 422 as with `PATCH`. |
+| [backend/src/services/user.service.ts](backend/src/services/user.service.ts) | `getOrCreateProfile` split into `getProfile` (read only, throws `profile_not_found`) and `createProfile` (returns `{ profile, created }`). The create-race re-read is kept. |
+| [backend/src/controllers/user.controller.ts](backend/src/controllers/user.controller.ts) | `getMe` no longer touches `req.query`. New `createMe`: 201 on creation, 200 when the document is already there. |
+| [backend/src/routes/user.routes.ts](backend/src/routes/user.routes.ts) | `POST /` added under the same `requireAuth`. |
+
+Defaults on creation are unchanged: Purpose, cycle day 1, streak 0,
+`direct` / `daily` / reminders on. `email` still comes from the verified token
+and is rejected if sent in the body.
+
+`POST /v1/me/onboarding` still creates the parent user document if it is
+missing. That is not the `GET` behaviour coming back in another door — it is
+the subcollection needing its parent, and it means a submitted assessment is
+not lost to a client that skipped `POST /v1/me`.
+
+### Verified against the emulators
+
+Ten cases, run end to end against the Auth and Firestore emulators with a
+token minted for a throwaway uid that had no document:
+
+| # | Case | Result |
+| --- | --- | --- |
+| 1 | `GET /v1/me`, unknown uid | **404** `profile_not_found` |
+| 2 | `GET /v1/me?name=…&countryCode=…&dateOfBirth=…` | **404** — the old query parameters create nothing and are silently ignored |
+| 3 | `POST` with `email` in the body | **422**, `Unrecognized key(s) in object: 'email'` |
+| 4 | `POST` with `preferredLanguage: "fr"` | **422**, names the field |
+| 5 | `POST` with the full valid body | **201**, profile returned, `countryCode: "mz"` upper-cased to `MZ` |
+| 6 | `POST` again with a different `name` | **200**, original document unchanged — the retry did not overwrite |
+| 7 | `GET /v1/me` after that | **200** with the profile |
+| 8 | `POST` with no body at all, fresh uid | **201** with every default filled in |
+| 9 | `POST` with no `Authorization` header | **401** `unauthorized` |
+| 10 | `users/{uid}/subscription/current` after creation | Present, carrying `revenueCatAppUserId` and `entitlementId`, no `providerCustomerId` |
+
+`npm run seed` was re-run afterwards and still writes its 8 subcollections and
+~32 documents.
+
+### The contract the Flutter side builds against
+
+Written into [backend/README.md](backend/README.md) so it is not just in a
+commit message:
+
+- **After sign-up** — Firebase Auth, then `POST /v1/me` with the registration
+  fields, then `GET /v1/me` from then on.
+- **On app start with an existing session** — `GET /v1/me`; on
+  `404 profile_not_found`, `POST /v1/me` to recover and carry on.
+
+Nothing in the Flutter app was touched.
+
+---
+
+## Task 3 — Subscription schema follows RevenueCat
+
+[backend/src/models/subscription.model.ts](backend/src/models/subscription.model.ts):
+
+| Was | Now |
+| --- | --- |
+| `provider: 'none' \| 'stripe' \| 'revenuecat'` | `provider: 'none' \| 'app_store' \| 'play_store'` — the originating store, since RevenueCat sits in front of both and would be the same value on every row |
+| `providerCustomerId` | `revenueCatAppUserId` |
+| — | `entitlementId` added; this is what the gating will read |
+
+`SUBSCRIPTION_PROVIDERS` is now `SUBSCRIPTION_STORES`, `SubscriptionProvider`
+is `SubscriptionStore`, and `INITIAL_SUBSCRIPTION`, `SubscriptionResult` and
+the seed script follow. The two commented Stripe placeholders in
+`SECRET_NAMES` became one commented `REVENUECAT_WEBHOOK_SECRET`.
+
+Nothing writes these fields yet. The purchase flow is a later pass and cannot
+be built until the app is in both stores.
+
+---
+
+## Task 2 — Cloud Run deploy: **not done**
+
+One useful thing came out of it. The region is now **confirmed rather than
+guessed**, read off the live database:
+
+```
+$ npx firebase firestore:databases:get '(default)' --project succenergy-ai-coach
+Type      FIRESTORE_NATIVE
+Location  nam5
+```
+
+`nam5` is the **United States multi-region**. Cloud Run cannot target a
+multi-region, so the service belongs in **`us-central1`** — one of `nam5`'s
+two constituent regions. The `europe-west1` placeholder is gone from the
+README, replaced by a `REGION` variable set once at the top of the sequence.
+
+Nothing was deployed. Three separate blockers, each sufficient on its own:
+
+| Blocker | Detail |
+| --- | --- |
+| **No `gcloud` CLI** | No Cloud SDK on the machine — not in `PATH`, not in either `Program Files`, not under `%LOCALAPPDATA%`. No `%APPDATA%\gcloud`, so no Application Default Credentials either. Installing it would not have helped: `gcloud auth login` needs an interactive browser sign-in that a non-interactive pass cannot complete. |
+| **No Docker daemon** | Docker Desktop is installed and was launched. It registered no daemon: `com.docker.service` is not installed as a Windows service, no `docker-desktop` WSL distro exists, and `docker info` cannot reach `npipe:////./pipe/docker_engine`. Same finding as the previous pass, re-checked rather than assumed. First-run setup needs an interactive elevated session. |
+| **The Firebase account is read-only on the project** | `npx firebase login:list` shows a signed-in account that can list `succenergy-ai-coach` and read its Firestore metadata. `firebase deploy --only firestore:rules,firestore:indexes` returns `403, The caller does not have permission` from `firebaserules.googleapis.com`. `PERMISSION_DENIED`, not `SERVICE_DISABLED` — a missing IAM grant, not a disabled API. |
+
+So `firestore:rules` and `firestore:indexes` are **also not deployed**. Note
+that `firebase deploy` compiles `firestore.rules` even for an
+`--only firestore:indexes` run, so the two cannot be separated to get the
+indexes in without rules permission.
+
+The image build was **not** verified, and the warning in the README's Docker
+section stays in place — reworded to say it was re-checked on this pass rather
+than left reading as a stale note. What the container *executes* was verified
+on the previous pass by running the compiled output directly; the unverified
+part is still the image layering.
+
+None of the six live-service checks were run, because there is no live
+service: health 200, ready 200, `/v1/me` 401 without a token, HSTS and the
+production headers, the 308 from plain HTTP, and the Cloud Logging PII sweep
+all wait on the deploy. The 401-without-token behaviour *was* confirmed
+locally (case 9 above); the rest are properties of the deployed environment
+and cannot be checked anywhere else.
+
+### What is ready for whoever runs it
+
+[backend/README.md](backend/README.md) has been rewritten from "pending" to a
+runnable sequence with the confirmed region, in the order specified: enable
+APIs, create the Artifact Registry repository, create the dedicated
+`succenergy-api` service account with `roles/datastore.user` and nothing else,
+verify the local Docker build, build and push, deploy. The `firestore
+databases create` step is gone — the database already exists and re-running it
+would fail rather than no-op.
+
+It also now lists the IAM roles the deploying account needs, since that turned
+out to be the binding constraint: `firebaserules.admin`,
+`datastore.indexAdmin`, `run.admin`, `artifactregistry.admin`,
+`cloudbuild.builds.editor`, `iam.serviceAccountAdmin` +
+`resourcemanager.projectIamAdmin`, and `iam.serviceAccountUser` on the runtime
+service account. Project `roles/owner` covers all of them.
+
+The decisions carried forward unchanged: no default compute service account,
+no project-wide `secretAccessor` (per secret, when each is first used),
+`--allow-unauthenticated` because the service enforces Firebase ID tokens
+itself and Cloud Run IAM would reject mobile clients that have no Google
+identity, and `NODE_ENV=production` with neither emulator host variable set —
+which boot refuses to start without anyway.
+
+---
+
+## What could not be done
+
+Stated plainly.
+
+1. **The Cloud Run deploy did not happen.** No `gcloud`, no Docker daemon, and
+   the one authenticated CLI on the machine has read-only project access. Any
+   one of those would have stopped it. This needs to be run by someone with
+   the Cloud SDK installed, signed in as an account with the roles listed
+   above — realistically the client's own owner account, or a fresh account
+   granted them.
+
+2. **`firestore.rules` and `firestore.indexes.json` are not deployed either.**
+   Same 403. Until they are, the project carries whatever default rules
+   Firestore was created with. That is not currently a data-exposure risk —
+   no client SDK points at this project and there is no data in it — but the
+   deny-all rules should go in **before** the app is live, and before the
+   service, since they only ever lock things down.
+
+3. **The Docker image build is still unverified.** Second pass in a row, same
+   cause. `gcloud builds submit` would surface a broken Dockerfile as a failed
+   remote build, which is recoverable but wastes a cycle, so it is worth
+   running `docker build -t succenergy-api:local .` once on a machine with a
+   working daemon first.
+
+4. **None of the live-service verification was possible.** Listed above. The
+   authenticated half of it was already out of scope for this pass — it needs
+   a real ID token from the Flutter side, and no test user should be created
+   in the production Auth instance to fake one.
+
+5. **`acceptedTerms` and `confirmedInfoTrue` accept `false`.** The old schema
+   used `z.literal(true)`, which would have rejected a request carrying an
+   unticked box. The task specified `boolean`, and a recorded refusal is more
+   useful than a 422, so `false` is now valid and stored. Nothing yet gates on
+   these being true — that is a product decision, and the endpoint records
+   rather than enforces.
+
+6. **`POST /v1/me` returns 200, not 409, on a repeat.** The task specified
+   this, and it is right, but it is worth being explicit that it means the
+   endpoint is **not** a way to detect "was this account already registered" —
+   a client cannot distinguish "I just created it" from "it was already there"
+   except by the status code, and should not branch on that for anything more
+   than logging.
