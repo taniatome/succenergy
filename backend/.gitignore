@@ -1,0 +1,34 @@
+# Environment — never commit real values
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+
+# Credentials — service account JSON must never reach the repository
+*serviceAccount*.json
+*service-account*.json
+*.pem
+*.p12
+gcloud-key*.json
+application_default_credentials.json
+
+# Firebase emulator artefacts
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*-debug.log
+emulator-data/
+
+# Logs and OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
