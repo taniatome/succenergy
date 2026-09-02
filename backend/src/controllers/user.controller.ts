@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 
 import { requireUser } from '../middleware/auth.js';
 import {
-  bootstrapProfileSchema,
+  createProfileSchema,
   saveOnboardingSchema,
   updateProfileSchema,
 } from '../schemas/user.schema.js';
@@ -25,18 +25,29 @@ function callerFrom(req: Request): Caller {
 /**
  * GET /v1/me
  *
- * Creates the profile when the uid is unknown, so the app never has to call a
- * registration endpoint after signing up client-side.
+ * A pure read. 404 `profile_not_found` when the uid has no document, which
+ * tells the client to call POST first.
  */
 export async function getMe(req: Request, res: Response): Promise<void> {
   const caller = callerFrom(req);
 
-  // Registration details may ride along on the first call. Query rather than
-  // body, because GET bodies are not reliably forwarded by proxies.
-  const bootstrap = bootstrapProfileSchema.parse(req.query);
-
-  const profile = await userService.getOrCreateProfile(caller, bootstrap);
+  const profile = await userService.getProfile(caller);
   res.json({ data: profile });
+}
+
+/**
+ * POST /v1/me
+ *
+ * First contact: creates the profile for the authenticated uid, with whatever
+ * registration collected in the body. 201 on creation, 200 when the document
+ * already exists, so a retry is harmless rather than a conflict.
+ */
+export async function createMe(req: Request, res: Response): Promise<void> {
+  const caller = callerFrom(req);
+  const input = createProfileSchema.parse(req.body);
+
+  const { profile, created } = await userService.createProfile(caller, input);
+  res.status(created ? 201 : 200).json({ data: profile });
 }
 
 /** PATCH /v1/me */

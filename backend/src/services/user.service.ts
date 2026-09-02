@@ -14,7 +14,7 @@ import type { UserDocument, UserResponse } from '../models/user.model.js';
 import { UserNotFoundError, userRepository } from '../repositories/user.repository.js';
 import type { UserRepository } from '../repositories/user.repository.js';
 import type {
-  BootstrapProfileInput,
+  CreateProfileInput,
   SaveOnboardingInput,
   UpdateProfileInput,
 } from '../schemas/user.schema.js';
@@ -110,23 +110,48 @@ export class UserService {
   // --- Profile ------------------------------------------------------------
 
   /**
-   * The caller's profile, creating the document if this uid is new.
+   * The caller's profile. A pure read: it never writes.
+   *
+   * A uid with no document is a 404 rather than an implicit create, because a
+   * GET that creates a resource is neither safe nor idempotent — retries,
+   * prefetches and intermediaries all assume a GET has no side effects. The
+   * `profile_not_found` code tells the client to call `POST /v1/me` instead of
+   * having to infer it from a bare 404.
+   */
+  async getProfile(caller: Caller): Promise<UserResponse> {
+    const existing = await this.users.findById(caller.uid);
+    if (!existing) {
+      throw new ApiError(
+        404,
+        'profile_not_found',
+        'No profile exists for this account yet. Create one with POST /v1/me.',
+      );
+    }
+
+    return this.toResponse(caller.uid, existing);
+  }
+
+  /**
+   * Creates the profile for the caller's uid.
    *
    * Registration happens client-side against Firebase Auth, so the first
    * authenticated request is the first this backend has heard of an account.
-   * Creating on read rather than requiring a separate registration call means
-   * there is no window in which a signed-in user has no profile.
+   *
+   * An existing document is returned as-is rather than treated as a conflict
+   * or overwritten: the client may retry a call whose response it never saw,
+   * and a retry must be harmless. `created` lets the controller answer 201 on
+   * a real creation and 200 on a repeat, so the caller can tell them apart.
    */
-  async getOrCreateProfile(
+  async createProfile(
     caller: Caller,
-    bootstrap: BootstrapProfileInput = {},
-  ): Promise<UserResponse> {
+    input: CreateProfileInput = {},
+  ): Promise<{ profile: UserResponse; created: boolean }> {
     const existing = await this.users.findById(caller.uid);
     if (existing) {
-      return this.toResponse(caller.uid, existing);
+      return { profile: this.toResponse(caller.uid, existing), created: false };
     }
 
-    const document = this.buildNewUser(caller, bootstrap);
+    const document = this.buildNewUser(caller, input);
 
     try {
       await this.users.create(caller.uid, document);
@@ -135,13 +160,13 @@ export class UserService {
       // both callers are the same person and both want the same document.
       const raced = await this.users.findById(caller.uid);
       if (raced) {
-        return this.toResponse(caller.uid, raced);
+        return { profile: this.toResponse(caller.uid, raced), created: false };
       }
       throw ApiError.internal('Could not create user profile', cause);
     }
 
-    logger.info({ uid: caller.uid }, 'Created user profile on first request');
-    return this.toResponse(caller.uid, document);
+    logger.info({ uid: caller.uid }, 'Created user profile');
+    return { profile: this.toResponse(caller.uid, document), created: true };
   }
 
   /**
@@ -152,18 +177,18 @@ export class UserService {
    * The cycle starts on Purpose at day one, which is where the methodology
    * begins.
    */
-  private buildNewUser(caller: Caller, bootstrap: BootstrapProfileInput): UserDocument {
+  private buildNewUser(caller: Caller, input: CreateProfileInput): UserDocument {
     const now = Timestamp.now();
 
     return {
-      name: bootstrap.name ?? '',
+      name: input.name ?? '',
       email: caller.email ?? '',
-      preferredLanguage: bootstrap.preferredLanguage ?? DEFAULT_LOCALE,
-      activity: bootstrap.activity ?? 'professional',
-      dateOfBirth: fromIso(bootstrap.dateOfBirth),
-      countryCode: bootstrap.countryCode ?? null,
-      acceptedTerms: bootstrap.acceptedTerms ?? false,
-      confirmedInfoTrue: bootstrap.confirmedInfoTrue ?? false,
+      preferredLanguage: input.preferredLanguage ?? DEFAULT_LOCALE,
+      activity: input.activity ?? 'professional',
+      dateOfBirth: fromIso(input.dateOfBirth),
+      countryCode: input.countryCode ?? null,
+      acceptedTerms: input.acceptedTerms ?? false,
+      confirmedInfoTrue: input.confirmedInfoTrue ?? false,
       currentPrinciple: FIRST_PRINCIPLE,
       cycleDay: 1,
       dayStreak: 0,
@@ -276,8 +301,10 @@ export class UserService {
     };
 
     // The onboarding document lives under the user document, so the user has
-    // to exist first — which for a first-time caller it may not yet.
-    await this.getOrCreateProfile(caller);
+    // to exist first. A client that reached the assessment has already been
+    // through registration, but creating here rather than 404-ing keeps a
+    // submitted assessment from being lost to a missed POST /v1/me.
+    await this.createProfile(caller);
     await this.users.saveOnboarding(caller.uid, document);
 
     logger.info(

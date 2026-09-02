@@ -112,23 +112,41 @@ export const saveOnboardingSchema = z
 export type SaveOnboardingInput = z.infer<typeof saveOnboardingSchema>;
 
 /**
- * The identity fields a client may supply on first contact, so the user
- * document created for an unknown uid carries what registration collected.
- * Everything is optional: the token alone is enough to create an account.
+ * POST /v1/me
+ *
+ * What registration collected, sent in the request body on first contact so
+ * the document created for an unknown uid carries it. Everything is optional:
+ * the verified token alone is enough to create an account.
+ *
+ * A body rather than query parameters, because Cloud Run writes the full
+ * request URL — query string included — to its platform request log, outside
+ * this application's redaction. Date of birth, name and country in a query
+ * string would therefore be logged on every first-contact request. Request
+ * bodies are not logged.
+ *
+ * `email` is absent by design: it comes from the verified token, so a client
+ * cannot claim an address it has not proven it owns. So are `cycleDay`,
+ * `dayStreak` and `currentPrinciple`, which the backend sets — consistent with
+ * what `PATCH /v1/me` refuses.
  */
-export const bootstrapProfileSchema = z
+export const createProfileSchema = z
   .object({
     name: displayNameSchema.optional(),
     preferredLanguage: z.enum(SUPPORTED_LOCALES).optional(),
     activity: z.enum(USER_ACTIVITIES).optional(),
     dateOfBirth: isoDateSchema.nullable().optional(),
     countryCode: countryCodeSchema.nullable().optional(),
-    acceptedTerms: z.literal(true).optional(),
-    confirmedInfoTrue: z.literal(true).optional(),
+
+    // Booleans, not `literal(true)`: the app sends the checkbox state it
+    // actually has, and a false is a recorded refusal rather than a malformed
+    // request. Whether consent gates anything is a product decision, not a
+    // validation one.
+    acceptedTerms: z.boolean().optional(),
+    confirmedInfoTrue: z.boolean().optional(),
   })
   .strict();
 
-export type BootstrapProfileInput = z.infer<typeof bootstrapProfileSchema>;
+export type CreateProfileInput = z.infer<typeof createProfileSchema>;
 
 /** Exported for the seed script and later passes. */
 export const principleSchema = z.enum(PRINCIPLES);

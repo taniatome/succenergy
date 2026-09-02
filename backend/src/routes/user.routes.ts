@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import {
+  createMe,
   deleteMe,
   getMe,
   getOnboarding,
@@ -27,6 +28,7 @@ export const userRouter = Router();
 userRouter.use(requireAuth);
 
 userRouter.get('/', asyncHandler(getMe));
+userRouter.post('/', asyncHandler(createMe));
 userRouter.patch('/', asyncHandler(updateMe));
 userRouter.delete('/', asyncHandler(deleteMe));
 
