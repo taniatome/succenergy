@@ -431,8 +431,9 @@ async function seed(): Promise<void> {
     trialStartedAt: daysAgo(21),
     trialEndsAt: daysAgo(21 - TRIAL_DAYS),
     currentPeriodEnd: daysAhead(9),
-    provider: 'stripe',
-    providerCustomerId: 'seed-customer-not-a-real-id',
+    provider: 'play_store',
+    revenueCatAppUserId: uid,
+    entitlementId: 'coach_full',
     updatedAt: daysAgo(14),
   });
 

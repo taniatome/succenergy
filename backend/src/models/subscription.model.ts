@@ -4,9 +4,14 @@ import type { Timestamp } from 'firebase-admin/firestore';
  * `users/{uid}/subscription/current`
  *
  * A fixed document id rather than a collection of subscription records: there
- * is one current state per account, and billing history lives with the
- * provider. Written only by this backend from verified provider webhooks —
- * never by the client, which is why nothing here is patchable through /v1/me.
+ * is one current state per account, and billing history lives with the store.
+ * Written only by this backend from verified RevenueCat webhooks — never by
+ * the client, which is why nothing here is patchable through /v1/me.
+ *
+ * Purchases go through native Apple and Google in-app purchase with
+ * RevenueCat in front of them. There is no Stripe: the app is distributed
+ * through the two stores, and both require their own billing for digital
+ * goods.
  */
 
 /**
@@ -27,9 +32,17 @@ export const SUBSCRIPTION_STATUSES = [
 ] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
-/** Who charged the card. `none` until a real purchase happens. */
-export const SUBSCRIPTION_PROVIDERS = ['none', 'stripe', 'revenuecat'] as const;
-export type SubscriptionProvider = (typeof SUBSCRIPTION_PROVIDERS)[number];
+/**
+ * Which store the purchase originated from. `none` until a real purchase
+ * happens.
+ *
+ * The store rather than the payment processor, because that is the fact that
+ * actually differs per account and the one support needs when a receipt has
+ * to be traced — RevenueCat is in front of both and would be the same value
+ * on every row.
+ */
+export const SUBSCRIPTION_STORES = ['none', 'app_store', 'play_store'] as const;
+export type SubscriptionStore = (typeof SUBSCRIPTION_STORES)[number];
 
 export interface SubscriptionDocument {
   tier: SubscriptionTier;
@@ -39,10 +52,24 @@ export interface SubscriptionDocument {
   trialEndsAt: Timestamp | null;
   currentPeriodEnd: Timestamp | null;
 
-  provider: SubscriptionProvider;
+  provider: SubscriptionStore;
 
-  /** The provider's customer identifier. Not a secret, but not shown either. */
-  providerCustomerId: string | null;
+  /**
+   * RevenueCat's app user id for this account. Not a secret, but not shown
+   * either. Set to the Firebase uid when the SDK is wired up, so the two
+   * systems agree on who a purchase belongs to without a mapping table.
+   */
+  revenueCatAppUserId: string | null;
+
+  /**
+   * The RevenueCat entitlement that grants access, e.g. `coach_full`.
+   *
+   * Access is gated on this rather than on `tier` or on a product id: an
+   * entitlement is what RevenueCat actually reports as active, and it stays
+   * stable while the products and prices behind it change per store and per
+   * activity.
+   */
+  entitlementId: string | null;
 
   updatedAt: Timestamp;
 }
@@ -53,7 +80,8 @@ export interface SubscriptionResult {
   trialStartedAt: string | null;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
-  provider: SubscriptionProvider;
+  provider: SubscriptionStore;
+  entitlementId: string | null;
   updatedAt: string;
 
   /** Derived: whether the app should open past the paywall. */
@@ -71,7 +99,8 @@ export const INITIAL_SUBSCRIPTION = {
   trialEndsAt: null,
   currentPeriodEnd: null,
   provider: 'none',
-  providerCustomerId: null,
+  revenueCatAppUserId: null,
+  entitlementId: null,
 } as const;
 
 export function isSubscriptionActive(status: SubscriptionStatus): boolean {

@@ -6,9 +6,9 @@ import { env, isEmulated } from './env.js';
  * Secret Manager accessor.
  *
  * Secrets are referenced by name and resolved at runtime. Nothing is
- * registered yet — the Claude key, the embeddings key and the Stripe keys
- * arrive in later passes, and each is a one-line addition to SECRET_NAMES
- * rather than a code change anywhere else.
+ * registered yet — the Claude key, the embeddings key and the RevenueCat
+ * webhook secret arrive in later passes, and each is a one-line addition to
+ * SECRET_NAMES rather than a code change anywhere else.
  *
  * Values are cached for the lifetime of the process. Cloud Run instances are
  * short-lived enough that rotation takes effect on the next cold start; if a
@@ -24,8 +24,7 @@ import { env, isEmulated } from './env.js';
 export const SECRET_NAMES = {
   // ANTHROPIC_API_KEY: 'anthropic-api-key',
   // EMBEDDINGS_API_KEY: 'embeddings-api-key',
-  // STRIPE_SECRET_KEY: 'stripe-secret-key',
-  // STRIPE_WEBHOOK_SIGNING_SECRET: 'stripe-webhook-signing-secret',
+  // REVENUECAT_WEBHOOK_SECRET: 'revenuecat-webhook-secret',
   // SUPABASE_CONNECTION_STRING: 'supabase-connection-string',
 } as const satisfies Record<string, string>;
 
