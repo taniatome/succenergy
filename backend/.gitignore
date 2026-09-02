@@ -32,5 +32,6 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
-scripts/_audit_delete.local.ts
-scripts/_uid.local.ts
+
+# Local-only scratch scripts (verification helpers, never committed)
+scripts/*.local.ts
