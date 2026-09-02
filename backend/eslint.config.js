@@ -21,7 +21,9 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      'no-console': ['error', { allow: [] }],
+      // Logging goes through pino so it is structured and redacted; a bare
+      // console.log would bypass both.
+      'no-console': 'error',
       eqeqeq: ['error', 'always'],
       curly: ['error', 'all'],
     },
