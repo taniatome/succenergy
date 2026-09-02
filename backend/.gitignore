@@ -32,3 +32,5 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+scripts/_audit_delete.local.ts
+scripts/_uid.local.ts

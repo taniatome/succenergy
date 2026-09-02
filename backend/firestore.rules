@@ -1,10 +1,27 @@
 rules_version = '2';
 
-// Deny-all. The mobile app never reads or writes Firestore directly; it
-// reaches data only through the API, which uses the Admin SDK and therefore
-// bypasses these rules. Anything a client can reach here is a mistake.
+// Deny-all.
+//
+// The mobile app never reads or writes Firestore directly — it reaches data
+// only through this API, which uses the Admin SDK and therefore bypasses
+// these rules entirely. So denying everything costs nothing and closes the
+// whole surface: no client SDK, no leaked config, and no future screen that
+// "just reads one collection" can reach user data without going through an
+// endpoint that verifies a token first.
+//
+// This is also what makes the API the single enforcement point for the
+// client's requirement that admin functions stay restricted to authorised
+// accounts. If clients could read Firestore under their own rules, that
+// check would live in two places and eventually disagree.
+//
+// If a client-side read is ever genuinely needed, add a narrow rule for that
+// one path with an explicit request.auth.uid == uid condition. Do not relax
+// the default.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Everything, at every depth, including subcollections of documents that
+    // do not themselves exist.
     match /{document=**} {
       allow read, write: if false;
     }
