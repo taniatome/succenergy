@@ -48,13 +48,23 @@ export function createApp(): Express {
   // HTTPS everywhere in production, per the client's security requirements.
   // Cloud Run already serves HTTPS; this closes the case where a custom
   // domain or a future proxy forwards a plain-HTTP request.
+  //
+  // The condition is "forwarded as plain HTTP", not "not known to be HTTPS".
+  // Cloud Run sends its HTTP startup and liveness probes straight to the
+  // container port rather than through the front end, so those arrive with no
+  // X-Forwarded-Proto at all — redirecting them would fail every probe and
+  // the revision would never come up. An absent header means the request did
+  // not come through the front end, which is not the case this guards.
   if (isProduction) {
     app.use((req, res, next) => {
-      if (req.secure || req.header('x-forwarded-proto') === 'https') {
-        next();
+      const forwardedProto = req.header('x-forwarded-proto');
+
+      if (forwardedProto !== undefined && forwardedProto !== 'https') {
+        res.redirect(308, `https://${req.hostname}${req.originalUrl}`);
         return;
       }
-      res.redirect(308, `https://${req.hostname}${req.originalUrl}`);
+
+      next();
     });
   }
 
