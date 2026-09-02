@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { healthRouter } from './health.routes.js';
+import { userRouter } from './user.routes.js';
 
 /**
  * Router assembly, versioned under /v1.
@@ -12,3 +13,7 @@ export const apiRouter = Router();
 
 // Public.
 apiRouter.use('/health', healthRouter);
+
+// Authenticated. Each router applies requireAuth itself, so a route added to
+// one cannot silently inherit public access from the mount point.
+apiRouter.use('/me', userRouter);
