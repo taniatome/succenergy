@@ -4,11 +4,14 @@ The API behind the Succenergy AI Coach app. TypeScript and Express on Cloud
 Run, Firestore for application data, Firebase Auth for authentication, and
 Google Secret Manager for every secret.
 
-Built and verified against the **Firebase Local Emulator Suite**. The client's
-GCP project has no billing account attached yet, so Cloud Run deploys and live
-Firestore are blocked; pointing this at the real project is a change to
-environment variables, not to code. See
-[Deploying to Cloud Run](#deploying-to-cloud-run-pending) for the blocker.
+Built and verified against the **Firebase Local Emulator Suite**. Billing is
+now attached to the GCP project and Firestore exists in **`nam5`** (US
+multi-region), so nothing about the project blocks a deploy any more — but
+**nothing has been deployed**. The machine this was built on has no `gcloud`
+CLI and no working Docker daemon, and the Firebase account signed in on it has
+read-only access to the project. See
+[Deploying to Cloud Run](#deploying-to-cloud-run) for the exact sequence, the
+confirmed region, and the IAM roles needed to run it.
 
 ---
 
@@ -30,7 +33,7 @@ environment variables, not to code. See
 - [Secrets](#secrets)
 - [Security decisions](#security-decisions)
 - [Docker](#docker)
-- [Deploying to Cloud Run (pending)](#deploying-to-cloud-run-pending)
+- [Deploying to Cloud Run](#deploying-to-cloud-run)
 - [What is not built yet](#what-is-not-built-yet)
 
 ---
@@ -153,6 +156,14 @@ TOKEN=$(npm run --silent token)
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8787/v1/me
 ```
 
+On an account that has never had a profile written, that returns
+`404 profile_not_found` — `GET /v1/me` does not create anything. Either run
+`npm run seed` first, or create the document explicitly:
+
+```bash
+curl -X POST http://127.0.0.1:8787/v1/me -H "Authorization: Bearer $TOKEN"
+```
+
 The script signs in as `TEST_USER_EMAIL` and creates that account only if it
 does not already exist, so re-running it will not reset the account and
 strand data seeded under it. Tokens last an hour.
@@ -209,7 +220,8 @@ Send `Authorization: Bearer <Firebase ID token>`.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/v1/me` | Current profile. **Creates the user document if the uid is unknown.** |
+| `POST` | `/v1/me` | **First contact.** Creates the user document for the token's uid (201; 200 if it already exists) |
+| `GET` | `/v1/me` | Current profile. Read only — `404 profile_not_found` if there is no document yet |
 | `PATCH` | `/v1/me` | Update profile fields |
 | `DELETE` | `/v1/me` | Delete the account and all data |
 | `POST` | `/v1/me/onboarding` | Save the onboarding response (201) |
@@ -219,17 +231,85 @@ There is deliberately no `/v1/users/:uid`. A caller only ever addresses
 themselves and the uid comes from the verified token, not the path, so one
 account cannot ask for another's data.
 
-#### `GET /v1/me` creates on first contact
+#### `POST /v1/me` creates on first contact
 
-Registration happens client-side, so the first authenticated request is the
-first this backend hears of an account. Creating the document on read means
-there is no window in which a signed-in user has no profile. Registration
-details may ride along as query parameters on that first call — `name`,
-`preferredLanguage`, `activity`, `dateOfBirth`, `countryCode`, `acceptedTerms`,
-`confirmedInfoTrue` — all optional; the token alone is enough.
+Registration happens client-side against Firebase Auth, so the first
+authenticated request is the first this backend hears of an account. `POST`
+is how that account gets a document. What registration collected goes in the
+**request body**, all of it optional — the verified token alone is enough to
+create a profile:
+
+| Field | Type |
+| --- | --- |
+| `name` | string, 1–80 chars |
+| `preferredLanguage` | `en` \| `pt` |
+| `activity` | `student_minorities` \| `professional` |
+| `dateOfBirth` | ISO 8601 date-time with offset |
+| `countryCode` | ISO 3166-1 alpha-2, upper-cased on the way in |
+| `acceptedTerms` | boolean |
+| `confirmedInfoTrue` | boolean |
+
+Unknown keys are rejected with 422, the same as `PATCH`. `email` is not
+accepted: it comes from the verified token, so a client cannot claim an
+address it has not proven it owns.
+
+```bash
+curl -X POST http://127.0.0.1:8787/v1/me   -H "Authorization: Bearer $TOKEN"   -H "Content-Type: application/json"   -d '{
+    "name":              "Ana Marques",
+    "preferredLanguage": "pt",
+    "activity":          "professional",
+    "dateOfBirth":       "1994-03-11T00:00:00Z",
+    "countryCode":       "MZ",
+    "acceptedTerms":     true,
+    "confirmedInfoTrue": true
+  }'
+```
+
+**201** with the created profile. **200** with the existing profile if the
+document is already there — not a 409, and not a second write. The client may
+retry a call whose response it never saw, and a retry has to be harmless.
 
 A new account starts on **Purpose**, cycle day 1, streak 0, with the default
 coaching preferences (`direct` / `daily` / reminders on).
+
+##### Why a body, and why not `GET`
+
+Registration details used to ride along on `GET /v1/me` as query parameters.
+Two things were wrong with that.
+
+**Cloud Run logs the full request URL, query string included.** That happens
+at the platform layer, in the request log, outside this application's control
+— `request_logger.ts` redaction cannot reach it. Date of birth, name and
+country would have been written to Cloud Logging on every first-contact
+request, against the brief's *"do not expose private user information through
+logs, public APIs or debug output"*. Request bodies are not logged, so a body
+satisfies it.
+
+**A `GET` that creates a resource is neither safe nor idempotent.** Retries,
+prefetches and intermediaries all assume a `GET` has no side effects, and a
+dropped connection followed by a retry could race on document creation.
+
+#### `GET /v1/me` is a pure read
+
+No query parameters, no writes. A uid with no document is:
+
+```json
+{ "error": { "code": "profile_not_found", "message": "...", "requestId": "..." } }
+```
+
+with status **404**, so the client knows to call `POST /v1/me` rather than
+having to infer it from a bare 404.
+
+#### The client flow
+
+Written down here because the app and the API have to agree on it:
+
+- **After sign-up** — register with Firebase Auth, then `POST /v1/me` with the
+  registration fields, then `GET /v1/me` from that point on.
+- **On app start with an existing session** — `GET /v1/me`. If it returns
+  `404 profile_not_found`, `POST /v1/me` to recover and continue. That covers
+  an account that signed up but never reached the `POST`, and an account whose
+  data was deleted server-side.
 
 #### `PATCH /v1/me` — what is patchable
 
@@ -728,10 +808,12 @@ which is not the user's data — is intact.
 
 Multi-stage, non-root, production dependencies only.
 
-> **The image build has not been verified.** Docker Desktop on the development
-> machine used for this pass has never completed first-run setup — there is no
-> `docker-desktop` WSL distro and the daemon cannot be provisioned without an
-> interactive session — so `docker build` had no daemon to talk to.
+> **The image build has still not been verified.** Re-checked on this pass:
+> Docker Desktop is installed, but launching it registers no daemon — the
+> `com.docker.service` helper is not installed, there is no `docker-desktop`
+> WSL distro, and `docker info` cannot reach `npipe:////./pipe/docker_engine`.
+> First-run setup needs an interactive elevated session that a non-interactive
+> pass cannot provide, so `docker build` again had no daemon to talk to.
 >
 > What the container *executes* was verified by running it directly: the
 > compiled `dist/` on production-only dependencies with
@@ -784,79 +866,198 @@ Image notes:
 
 ---
 
-## Deploying to Cloud Run (pending)
+## Deploying to Cloud Run
 
-> **Blocked.** The `succenergy-ai-coach` GCP project has **no billing account
-> attached**, so Cloud Run, Artifact Registry and live Firestore are all
-> unavailable. Nothing below has been run. Everything above was built and
-> verified against the Firebase Local Emulator Suite.
->
-> **Client action required: attach a billing account to the project.** Once
-> that is done, this section should work unchanged — pointing the service at
-> the real project is a change to environment variables, not to code.
+**Status: not deployed.** Billing is attached and Firestore exists, so nothing
+about the project blocks this any more. What blocks it is the machine this pass
+ran on:
 
-Once billing is enabled:
+| Requirement | State here |
+| --- | --- |
+| `gcloud` CLI | **Not installed.** No Cloud SDK anywhere on the machine, and no Application Default Credentials to authenticate one with. |
+| Docker daemon | **Not available.** Docker Desktop is installed but its privileged helper service is not registered and no `docker-desktop` WSL distro exists, so the daemon cannot be provisioned without an interactive elevated session. |
+| Firebase CLI | Installed and signed in, but the signed-in account has **read-only access** to the project. It can read the Firestore database's metadata; it cannot write rules. |
+
+One thing did come out of it: the deploy **region is now confirmed** rather
+than guessed, read off the live database through the Firebase CLI. Everything
+else below still has to be run by someone with the tooling and the IAM to do
+it.
+
+### What the signed-in account can and cannot do
+
+`npx firebase login:list` reports an account that can list the project and
+read `projects/succenergy-ai-coach/databases/(default)`. It cannot deploy:
+
+```
+$ npx firebase deploy --only firestore:rules,firestore:indexes --project succenergy-ai-coach
+Error: Request to https://firebaserules.googleapis.com/v1/projects/succenergy-ai-coach:test
+had HTTP Error: 403, The caller does not have permission
+```
+
+`PERMISSION_DENIED`, not `SERVICE_DISABLED` — so this is an IAM grant that
+is missing, not an API that needs enabling. Whoever runs the deploy needs, on
+`succenergy-ai-coach`:
+
+| Role | For |
+| --- | --- |
+| `roles/firebaserules.admin` | deploying `firestore.rules` |
+| `roles/datastore.indexAdmin` | deploying `firestore.indexes.json` |
+| `roles/run.admin` | `gcloud run deploy` |
+| `roles/artifactregistry.admin` | creating the image repository |
+| `roles/cloudbuild.builds.editor` | `gcloud builds submit` |
+| `roles/iam.serviceAccountAdmin` + `roles/resourcemanager.projectIamAdmin` | creating `succenergy-api` and binding `roles/datastore.user` to it |
+| `roles/iam.serviceAccountUser` on `succenergy-api` | letting Cloud Run run as it |
+
+Project `roles/owner` covers all of these and is what the client's own account
+will already have.
+
+### The region: `us-central1`
+
+Read off the live database rather than chosen:
 
 ```bash
+npx firebase firestore:databases:get '(default)' --project succenergy-ai-coach
+# Type      FIRESTORE_NATIVE
+# Location  nam5
+```
+
+`nam5` is the **United States multi-region**, which is what the client asked
+for. Cloud Run cannot be deployed to a multi-region, so it goes to
+**`us-central1`** — one of `nam5`'s two constituent regions and the
+conventional pairing. Every request in this service reads Firestore, so
+co-location matters: a European Cloud Run against `nam5` Firestore would add a
+transatlantic round trip to all of them for no benefit.
+
+`europe-west1` appeared as a placeholder in earlier revisions of this file.
+It is gone.
+
+### The sequence
+
+`REGION` is set once at the top so there is one place to change it.
+
+```bash
+export PROJECT=succenergy-ai-coach
+export REGION=us-central1
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT/succenergy/api:$(git rev-parse --short HEAD)
+
+# 0. Confirm Firestore's location has not moved, before anything is created
+gcloud firestore databases describe --database='(default)' --project $PROJECT
+
 # 1. Enable the APIs
 gcloud services enable \
   run.googleapis.com \
   artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com \
   firestore.googleapis.com \
   secretmanager.googleapis.com \
-  --project succenergy-ai-coach
+  --project $PROJECT
 
-# 2. Create the Firestore database (native mode), once
-gcloud firestore databases create --location=europe-west1 --project succenergy-ai-coach
-
-# 3. Artifact Registry repository, once
+# 2. Artifact Registry repository, once
 gcloud artifacts repositories create succenergy \
-  --repository-format=docker --location=europe-west1 \
-  --project succenergy-ai-coach
+  --repository-format=docker --location=$REGION \
+  --project $PROJECT
 
-# 4. A dedicated runtime service account — not the default compute one
+# 3. A dedicated runtime service account, not the default compute one
 gcloud iam service-accounts create succenergy-api \
-  --display-name "Succenergy API runtime" --project succenergy-ai-coach
+  --display-name "Succenergy API runtime" --project $PROJECT
 
-gcloud projects add-iam-policy-binding succenergy-ai-coach \
-  --member serviceAccount:succenergy-api@succenergy-ai-coach.iam.gserviceaccount.com \
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member serviceAccount:succenergy-api@$PROJECT.iam.gserviceaccount.com \
   --role roles/datastore.user
 
-# Grant secretAccessor per secret as each one is added, not project-wide.
+# Grant secretAccessor per secret as each one is added, never project-wide.
+
+# 4. Verify the image builds locally before spending a remote build on it
+docker build -t succenergy-api:local .
 
 # 5. Build and push
-gcloud builds submit \
-  --tag europe-west1-docker.pkg.dev/succenergy-ai-coach/succenergy/api:$(git rev-parse --short HEAD) \
-  --project succenergy-ai-coach
+gcloud builds submit --tag $IMAGE --project $PROJECT
 
 # 6. Deploy
 gcloud run deploy succenergy-api \
-  --image europe-west1-docker.pkg.dev/succenergy-ai-coach/succenergy/api:$(git rev-parse --short HEAD) \
-  --region europe-west1 \
+  --image $IMAGE \
+  --region $REGION \
   --platform managed \
-  --service-account succenergy-api@succenergy-ai-coach.iam.gserviceaccount.com \
-  --set-env-vars NODE_ENV=production,GCP_PROJECT_ID=succenergy-ai-coach,FIREBASE_PROJECT_ID=succenergy-ai-coach,LOG_LEVEL=info \
+  --service-account succenergy-api@$PROJECT.iam.gserviceaccount.com \
+  --set-env-vars NODE_ENV=production,GCP_PROJECT_ID=$PROJECT,FIREBASE_PROJECT_ID=$PROJECT,LOG_LEVEL=info \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances 10 \
-  --project succenergy-ai-coach
+  --project $PROJECT
+```
 
-# 7. Rules and indexes
+The Firestore `databases create` step that used to be step 2 is gone: the
+database already exists, and running it again would fail rather than be a
+harmless no-op.
+
+### Rules and indexes
+
+**Not deployed** — attempted and refused with the 403 above.
+
+```bash
 npx firebase deploy --only firestore:rules,firestore:indexes --project succenergy-ai-coach
 ```
 
-Notes for whoever runs this:
+Worth running **first**, before the service. It is independent of Cloud Run
+— rules and indexes are database configuration, not application deployment
+— and the rules are [deny-all](#rules-deny-all), so running them first
+locks the database down before anything is reachable rather than after.
+
+Until they are deployed the project carries whatever default rules Firestore
+was created with. That is not currently a data-exposure risk, because there is
+no client SDK pointed at this project and no data in it beyond what the
+emulator holds locally, but it should not stay that way once the app is live.
+Note that `firebase deploy` compiles `firestore.rules` even for an
+`--only firestore:indexes` run, so the two cannot be separated to get the
+indexes in without rules permission.
+
+### Checking the service once it is up
+
+```bash
+SERVICE=$(gcloud run services describe succenergy-api --region $REGION \
+  --project $PROJECT --format 'value(status.url)')
+
+curl -i $SERVICE/v1/health            # 200
+curl -i $SERVICE/v1/health/ready      # 200, proves the runtime SA reaches Firestore
+curl -i $SERVICE/v1/me                # 401, no token
+curl -sI $SERVICE/v1/health | grep -i strict-transport-security
+curl -sI http://${SERVICE#https://}/v1/health   # 308 to https
+```
+
+`/v1/health/ready` is the one that matters most: it round-trips a Firestore
+read, so a 200 confirms `roles/datastore.user` on `succenergy-api` actually
+works. A 503 there means the binding did not take.
+
+Then confirm in Cloud Logging that request log lines carry no email addresses,
+names, tokens or user content:
+
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="succenergy-api"' \
+  --limit 50 --project $PROJECT
+```
+
+**Authenticated verification waits for the Flutter side.** A real ID token has
+to come from the app's own sign-in against the production Auth instance. Do
+**not** create a test user in production Auth to get one — `401` on a
+tokenless request is sufficient proof the middleware is active, and a real
+account in the client's live user list is not worth a curl.
+
+### Notes for whoever runs this
 
 - **Do not set `FIRESTORE_EMULATOR_HOST` or `FIREBASE_AUTH_EMULATOR_HOST` on
   the service.** Boot refuses to start if either is set with
-  `NODE_ENV=production`.
+  `NODE_ENV=production`, which is deliberate — a production instance quietly
+  talking to an emulator is worse than one that will not start.
 - `--allow-unauthenticated` is correct here: the service is public at the
   network level and enforces Firebase ID tokens itself. Cloud Run IAM would
   reject mobile clients, which have no Google identity.
-- Secrets go in as `--set-secrets`, not `--set-env-vars`, once
-  `SECRET_NAMES` has entries.
-- Set the region once and keep Firestore and Cloud Run in the same one;
-  `europe-west1` is a placeholder until the client confirms.
+- **Not** the default compute service account. It carries `roles/editor`
+  across the project; `succenergy-api` carries `roles/datastore.user` and
+  nothing else.
+- Secrets go in as `--set-secrets`, not `--set-env-vars`, once `SECRET_NAMES`
+  has entries. `--set-env-vars` puts the value in the service's own
+  configuration, readable by anyone with Cloud Run view access.
 - `--min-instances 0` scales to zero and accepts cold starts. Raise to 1 if
   first-request latency matters more than idle cost.
 
@@ -866,8 +1067,9 @@ Notes for whoever runs this:
 
 Out of scope for this pass, listed so nobody looks for them:
 
-Claude integration, RAG, Supabase/pgvector, embeddings, Stripe, RevenueCat,
-push notifications, and the goals, exercises, progress and admin endpoints.
+Claude integration, RAG, Supabase/pgvector, embeddings, the RevenueCat SDK
+and its webhook, push notifications, and the goals, exercises, progress and
+admin endpoints.
 Email sending. The Flutter app still runs entirely on its mock repositories —
 swapping them for this API starts next.
 

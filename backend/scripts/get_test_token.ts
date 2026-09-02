@@ -6,6 +6,9 @@
  *   TOKEN=$(npm run --silent token)
  *   curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8787/v1/me
  *
+ * An account with no profile document yet answers 404 profile_not_found there;
+ * `curl -X POST .../v1/me` with the same token creates one.
+ *
  * Emulator only, and it refuses to run otherwise. The Auth emulator's REST
  * endpoints accept any string as the Web API key, so no real key is needed
  * and none is stored — the placeholder below is not a credential.

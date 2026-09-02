@@ -22,6 +22,9 @@ import { asyncHandler } from '../utils/async_handler.js';
  * There is no `/v1/users/:uid`: a caller only ever addresses themselves, and
  * the uid comes from the verified token rather than the path, so one account
  * cannot ask for another's data.
+ *
+ * `POST /` is the only route here that creates the user document. `GET /` is a
+ * pure read, so a retry or a prefetch cannot have a side effect.
  */
 export const userRouter = Router();
 
