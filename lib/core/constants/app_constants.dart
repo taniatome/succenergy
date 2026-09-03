@@ -32,6 +32,24 @@ class AppConstants {
   /// Narrowest layout the app is designed to hold without overflow.
   static const double minSupportedWidth = 360;
 
+  // --- Backend -------------------------------------------------------------
+
+  /// Root of the Succenergy API, without a trailing slash.
+  ///
+  /// The default is the Android emulator's route to the host machine. A
+  /// physical device needs the machine's LAN address instead, passed at build
+  /// time: `--dart-define=API_URL=http://192.168.1.20:8787`.
+  static const String apiBaseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'http://10.0.2.2:8787',
+  );
+
+  /// Version prefix every endpoint sits behind.
+  static const String apiVersion = 'v1';
+
+  /// How long a single API call is given before it is treated as offline.
+  static const Duration apiTimeout = Duration(seconds: 20);
+
   /// Supported locale codes, in the order shown on the language screen.
   static const List<String> supportedLocales = <String>['en', 'pt'];
 
@@ -80,4 +98,10 @@ class AppConstants {
 
   /// Placeholder: YouTube.
   static const String placeholderYouTubeUrl = 'https://youtube.com/@succenergy';
+
+  /// Placeholder: the terms and conditions page.
+  static const String placeholderTermsUrl = 'https://succenergy.com/terms';
+
+  /// Placeholder: the privacy policy page.
+  static const String placeholderPrivacyUrl = 'https://succenergy.com/privacy';
 }
