@@ -16,7 +16,10 @@ import '../features/ai_coach/ai_coach_screen.dart';
 import '../features/ai_coach/coach_provider.dart';
 import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/login_screen.dart';
-import '../features/auth/register_screen.dart';
+import '../features/auth/registration/registration_draft.dart';
+import '../features/auth/registration/step1_account_screen.dart';
+import '../features/auth/registration/step2_about_you_screen.dart';
+import '../features/auth/registration/step3_consent_screen.dart';
 import '../features/coaching_history/coaching_history_screen.dart';
 import '../features/coaching_history/session_detail_screen.dart';
 import '../features/dashboard/dashboard_provider.dart';
@@ -71,7 +74,7 @@ class AppRouter {
         _page(Routes.language, (_) => const LanguageSelectionScreen()),
         _page(Routes.quiz, _quiz),
         _page(Routes.login, (_) => const LoginScreen()),
-        _page(Routes.register, (_) => const RegisterScreen()),
+        _registration(),
         _page(Routes.forgotPassword, (_) => const ForgotPasswordScreen()),
         _page(Routes.trial, (_) => const TrialScreen()),
         _page(Routes.trialWelcome, (_) => const TrialWelcomeScreen()),
@@ -212,6 +215,29 @@ class AppRouter {
             _page(Routes.progress, (_) => const ProgressScreen()),
           ],
         ),
+      ],
+    );
+  }
+
+  /// The three registration steps, sharing one [RegistrationDraft].
+  ///
+  /// Three full screens rather than pages inside a PageView, so the system
+  /// back gesture steps back through them and each arrives on the app's own
+  /// fade-through. The draft is created once above all three and holds what
+  /// has been entered so far, which is what lets step three submit everything
+  /// in one call rather than writing a partial account at each step.
+  static ShellRoute _registration() {
+    return ShellRoute(
+      builder: (BuildContext context, GoRouterState state, Widget child) {
+        return ChangeNotifierProvider<RegistrationDraft>(
+          create: (BuildContext context) => RegistrationDraft(),
+          child: child,
+        );
+      },
+      routes: <RouteBase>[
+        _page(Routes.register, (_) => const Step1AccountScreen()),
+        _page(Routes.registerAbout, (_) => const Step2AboutYouScreen()),
+        _page(Routes.registerConsent, (_) => const Step3ConsentScreen()),
       ],
     );
   }

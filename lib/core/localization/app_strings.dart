@@ -89,20 +89,42 @@ class AppStrings {
     'auth.login.title': 'Continue your cycle',
     'auth.login.subtitle':
         'Your goals, your plan and your coach are where you left them.',
+    'auth.login.signingIn': 'Signing you in...',
+    'auth.login.toRegister': 'Don\'t have an account? Start your journey.',
+    'auth.login.toRegisterLink': 'Start your journey.',
     'auth.register.eyebrow': 'Create account',
     'auth.register.title': 'Begin the first cycle',
     'auth.register.subtitle':
         'Seven questions and your AI Succenergy Coach will know how to work '
         'with you.',
+    'auth.register.step': 'Step {current} of {total}',
+    'auth.register.step1.title': 'Your account',
+    'auth.register.step1.subtitle':
+        'An email and a password. Nothing is created until you have seen what '
+        'you are signing up for.',
+    'auth.register.step2.title': 'About you',
+    'auth.register.step2.subtitle':
+        'Four answers your coach works from, and the one that sets your rate '
+        'after the trial.',
+    'auth.register.step3.title': 'Almost there',
+    'auth.register.step3.subtitle':
+        'Two confirmations and your first cycle begins.',
     'auth.field.name': 'Full name',
     'auth.field.email': 'Email',
     'auth.field.dob': 'Date of birth',
     'auth.field.country': 'Country',
     'auth.field.activity': 'Activity',
+    'auth.field.password': 'Password',
+    'auth.field.confirmPassword': 'Confirm password',
     'auth.hint.name': 'Your full name',
     'auth.hint.email': 'taniatome@succenergy.com',
+    'auth.hint.newPassword': 'At least 8 characters',
     'auth.activity.student': 'Student | Minorities',
+    'auth.activity.student.detail':
+        'The reduced monthly rate, for students and minorities.',
     'auth.activity.professional': 'Professional',
+    'auth.activity.professional.detail':
+        'The standard monthly rate, for everyone else.',
     'auth.dob.placeholder': 'Select your date of birth',
     'auth.dob.day': 'Day',
     'auth.dob.month': 'Month',
@@ -110,34 +132,63 @@ class AppStrings {
     'auth.country.placeholder': 'Select your country',
     'auth.country.search': 'Search countries',
     'auth.country.empty': 'No country matches that.',
-    'auth.consent.terms': 'I accept the terms and conditions.',
+    'auth.consent.terms': 'I accept the Terms and Conditions.',
+    'auth.consent.termsLink': 'Terms and Conditions',
     'auth.consent.truth':
-        'I confirm that all the information I have given is true.',
-    'auth.field.password': 'Password',
-    'auth.field.confirmPassword': 'Confirm password',
-    'auth.action.login': 'Log in',
-    'auth.action.register': 'Create account',
-    'auth.action.forgot': 'Forgot password',
-    'auth.toRegister': 'New here? Create an account',
+        'I confirm that all the information I have given is true and accurate.',
+    'auth.summary.eyebrow': 'What you are signing up for',
+    'auth.summary.trialLabel': 'Your first {days} days',
+    'auth.summary.trialValue': '{price}',
+    'auth.summary.monthlyLabel': 'Every month after that',
+    'auth.summary.monthlyValue': '{price}',
+    'auth.summary.cancel': 'Cancel any time before the trial ends.',
+    'auth.action.login': 'Sign in',
+    'auth.action.createAccount': 'Create my account',
+    'auth.action.forgot': 'Forgot password?',
     'auth.toLogin': 'I already have an account',
     'auth.error.nameRequired': 'Tell us what to call you.',
+    'auth.error.nameShort': 'That looks too short to be a name.',
     'auth.error.emailRequired': 'Enter your email address.',
     'auth.error.emailInvalid': 'That does not look like an email address.',
+    'auth.error.emailInUse': 'That address already has an account.',
     'auth.error.passwordRequired': 'Enter your password.',
-    'auth.error.passwordShort': 'Use at least 8 characters.',
+    'auth.error.passwordWeak':
+        'Use at least 8 characters, with a letter and a number.',
+    'auth.error.confirmRequired': 'Enter your password again.',
     'auth.error.passwordMatch': 'The two passwords do not match.',
     'auth.error.dobRequired': 'Enter your date of birth.',
     'auth.error.dobTooYoung': 'You have to be at least 16 to register.',
     'auth.error.countryRequired': 'Choose your country.',
-    'auth.error.consentRequired': 'Tick both boxes before you continue.',
+    'auth.error.activityRequired': 'Choose which describes you.',
+    'auth.error.signInFailed': 'Incorrect email or password.',
+    'auth.error.accountDisabled':
+        'This account has been disabled. Please contact support.',
+    'auth.error.tooManyAttempts':
+        'Too many sign-in attempts. Please wait a few minutes.',
+    'auth.error.network': 'No connection. Check your network and try again.',
+    'auth.error.unavailable':
+        'Sign-in is unavailable on this build. Please try again later.',
+    'auth.error.generic': 'Something went wrong. Please try again.',
     'auth.forgot.title': 'Reset your password',
     'auth.forgot.subtitle':
         'Enter the email on your account and we will send a reset link.',
     'auth.forgot.action': 'Send reset link',
     'auth.forgot.sentTitle': 'Check your inbox',
     'auth.forgot.sentBody':
-        'If an account exists for that address, a reset link is on its way.',
-    'auth.forgot.backToLogin': 'Back to log in',
+        'If an account exists for {email}, we have sent a reset link.',
+    'auth.forgot.spam': 'Check your spam folder if you do not see it.',
+    'auth.forgot.backToLogin': 'Back to sign in',
+    'auth.biometric.title': 'Sign in faster next time',
+    'auth.biometric.bodyFace':
+        'Use Face ID to unlock your account without typing your password.',
+    'auth.biometric.bodyFingerprint':
+        'Use your fingerprint to unlock your account without typing your '
+        'password.',
+    'auth.biometric.bodyGeneric':
+        'Use biometrics to unlock your account without typing your password.',
+    'auth.biometric.enable': 'Enable',
+    'auth.biometric.later': 'Maybe later',
+    'auth.biometric.reason': 'Sign in to your Succenergy AI Coach account',
 
     // --- Onboarding --------------------------------------------------------
     'onboarding.eyebrow': 'Assessment',
@@ -668,20 +719,42 @@ class AppStrings {
     'auth.login.title': 'Continue o seu ciclo',
     'auth.login.subtitle':
         'Os seus objetivos, o seu plano e o seu coach estão onde os deixou.',
+    'auth.login.signingIn': 'A entrar...',
+    'auth.login.toRegister': 'Ainda não tem conta? Comece a sua jornada.',
+    'auth.login.toRegisterLink': 'Comece a sua jornada.',
     'auth.register.eyebrow': 'Criar conta',
     'auth.register.title': 'Comece o primeiro ciclo',
     'auth.register.subtitle':
         'Sete perguntas e o seu AI Succenergy Coach saberá como trabalhar '
         'consigo.',
+    'auth.register.step': 'Passo {current} de {total}',
+    'auth.register.step1.title': 'A sua conta',
+    'auth.register.step1.subtitle':
+        'Um email e uma palavra-passe. Nada é criado antes de ver o que está '
+        'a subscrever.',
+    'auth.register.step2.title': 'Sobre si',
+    'auth.register.step2.subtitle':
+        'Quatro respostas com que o seu coach trabalha, e a que define o seu '
+        'valor depois do período de teste.',
+    'auth.register.step3.title': 'Falta pouco',
+    'auth.register.step3.subtitle':
+        'Duas confirmações e o seu primeiro ciclo começa.',
     'auth.field.name': 'Nome completo',
     'auth.field.email': 'Email',
     'auth.field.dob': 'Data de nascimento',
     'auth.field.country': 'País',
     'auth.field.activity': 'Atividade',
+    'auth.field.password': 'Palavra-passe',
+    'auth.field.confirmPassword': 'Confirmar palavra-passe',
     'auth.hint.name': 'O seu nome completo',
     'auth.hint.email': 'taniatome@succenergy.com',
+    'auth.hint.newPassword': 'Pelo menos 8 caracteres',
     'auth.activity.student': 'Estudante | Minorias',
+    'auth.activity.student.detail':
+        'O valor mensal reduzido, para estudantes e minorias.',
     'auth.activity.professional': 'Profissional',
+    'auth.activity.professional.detail':
+        'O valor mensal normal, para todos os outros.',
     'auth.dob.placeholder': 'Escolha a sua data de nascimento',
     'auth.dob.day': 'Dia',
     'auth.dob.month': 'Mês',
@@ -689,36 +762,67 @@ class AppStrings {
     'auth.country.placeholder': 'Escolha o seu país',
     'auth.country.search': 'Procurar países',
     'auth.country.empty': 'Nenhum país corresponde a isso.',
-    'auth.consent.terms': 'Aceito os termos e condições.',
+    'auth.consent.terms': 'Aceito os Termos e Condições.',
+    'auth.consent.termsLink': 'Termos e Condições',
     'auth.consent.truth':
-        'Confirmo que toda a informação que indiquei é '
-        'verdadeira.',
-    'auth.field.password': 'Palavra-passe',
-    'auth.field.confirmPassword': 'Confirmar palavra-passe',
+        'Confirmo que toda a informação que indiquei é verdadeira e exata.',
+    'auth.summary.eyebrow': 'O que está a subscrever',
+    'auth.summary.trialLabel': 'Os seus primeiros {days} dias',
+    'auth.summary.trialValue': '{price}',
+    'auth.summary.monthlyLabel': 'Todos os meses seguintes',
+    'auth.summary.monthlyValue': '{price}',
+    'auth.summary.cancel':
+        'Cancele quando quiser antes do fim do período de teste.',
     'auth.action.login': 'Entrar',
-    'auth.action.register': 'Criar conta',
-    'auth.action.forgot': 'Esqueci a palavra-passe',
-    'auth.toRegister': 'Primeira vez? Crie uma conta',
+    'auth.action.createAccount': 'Criar a minha conta',
+    'auth.action.forgot': 'Esqueceu a palavra-passe?',
     'auth.toLogin': 'Já tenho conta',
     'auth.error.nameRequired': 'Diga-nos como o devemos tratar.',
+    'auth.error.nameShort': 'Isso parece demasiado curto para ser um nome.',
     'auth.error.emailRequired': 'Introduza o seu email.',
     'auth.error.emailInvalid': 'Isto não parece um endereço de email.',
+    'auth.error.emailInUse': 'Esse endereço já tem uma conta.',
     'auth.error.passwordRequired': 'Introduza a sua palavra-passe.',
-    'auth.error.passwordShort': 'Use pelo menos 8 caracteres.',
+    'auth.error.passwordWeak':
+        'Use pelo menos 8 caracteres, com uma letra e um número.',
+    'auth.error.confirmRequired': 'Introduza a palavra-passe outra vez.',
     'auth.error.passwordMatch': 'As duas palavras-passe não coincidem.',
     'auth.error.dobRequired': 'Introduza a sua data de nascimento.',
     'auth.error.dobTooYoung':
         'É preciso ter pelo menos 16 anos para se registar.',
     'auth.error.countryRequired': 'Escolha o seu país.',
-    'auth.error.consentRequired': 'Marque as duas caixas antes de continuar.',
+    'auth.error.activityRequired': 'Escolha o que o descreve.',
+    'auth.error.signInFailed': 'Email ou palavra-passe incorretos.',
+    'auth.error.accountDisabled':
+        'Esta conta foi desativada. Contacte o suporte.',
+    'auth.error.tooManyAttempts':
+        'Demasiadas tentativas. Aguarde alguns minutos.',
+    'auth.error.network': 'Sem ligação. Verifique a rede e tente novamente.',
+    'auth.error.unavailable':
+        'A entrada não está disponível nesta versão. Tente mais tarde.',
+    'auth.error.generic': 'Algo não correu bem. Tente novamente.',
     'auth.forgot.title': 'Repor a palavra-passe',
     'auth.forgot.subtitle':
         'Introduza o email da sua conta e enviamos um link de reposição.',
     'auth.forgot.action': 'Enviar link',
     'auth.forgot.sentTitle': 'Verifique o seu email',
     'auth.forgot.sentBody':
-        'Se existir uma conta para esse endereço, o link está a caminho.',
+        'Se existir uma conta para {email}, enviámos um link de reposição.',
+    'auth.forgot.spam': 'Veja a pasta de spam se não o encontrar.',
     'auth.forgot.backToLogin': 'Voltar à entrada',
+    'auth.biometric.title': 'Entre mais depressa na próxima vez',
+    'auth.biometric.bodyFace':
+        'Use o Face ID para desbloquear a sua conta sem escrever a '
+        'palavra-passe.',
+    'auth.biometric.bodyFingerprint':
+        'Use a impressão digital para desbloquear a sua conta sem escrever a '
+        'palavra-passe.',
+    'auth.biometric.bodyGeneric':
+        'Use a biometria para desbloquear a sua conta sem escrever a '
+        'palavra-passe.',
+    'auth.biometric.enable': 'Ativar',
+    'auth.biometric.later': 'Talvez mais tarde',
+    'auth.biometric.reason': 'Entre na sua conta Succenergy AI Coach',
 
     // --- Onboarding --------------------------------------------------------
     'onboarding.eyebrow': 'Avaliação',

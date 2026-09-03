@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/icons/app_icon.dart';
+import '../../../core/widgets/inputs/inline_field_error.dart';
 import '../../../core/widgets/section_eyebrow.dart';
 
 /// A field that opens a sheet instead of taking typing.
@@ -82,13 +83,7 @@ class SelectorField extends StatelessWidget {
             ),
           ),
         ),
-        if (hasError) ...<Widget>[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            errorText!,
-            style: AppTypography.caption.copyWith(color: AppColors.error),
-          ),
-        ],
+        InlineFieldError(message: errorText),
       ],
     );
   }

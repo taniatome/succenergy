@@ -33,9 +33,9 @@ class AuthState extends ChangeNotifier {
   }) : _resolver = resolver,
        _auth = auth ?? FirebaseAuth.instance,
        isAvailable = true {
-    _subscription = (auth ?? FirebaseAuth.instance)
-        .authStateChanges()
-        .listen(_onUserChanged);
+    _subscription = (auth ?? FirebaseAuth.instance).authStateChanges().listen(
+      _onUserChanged,
+    );
   }
 
   /// The state to run in when Firebase could not start.
@@ -90,7 +90,27 @@ class AuthState extends ChangeNotifier {
   /// taken, so the router moves on without waiting for a relaunch.
   Future<void> refresh() => _resolve(++_generation);
 
+  bool _suspended = false;
+
+  /// Stops routing decisions while a flow writes the account itself.
+  ///
+  /// Registration is two writes: the credential, then the profile. Between
+  /// them `GET /v1/me` answers 404, and the gate would send the flow back to
+  /// step two while step three is still running. The screen doing the writing
+  /// says when it is finished, and [resume] re-reads once.
+  void suspend() {
+    _suspended = true;
+  }
+
+  Future<void> resume() async {
+    _suspended = false;
+    await refresh();
+  }
+
   void _onUserChanged(User? user) {
+    if (_suspended) {
+      return;
+    }
     final int generation = ++_generation;
 
     if (user == null) {
@@ -108,7 +128,7 @@ class AuthState extends ChangeNotifier {
 
   Future<void> _resolve(int generation) async {
     final SessionResolver? resolver = _resolver;
-    if (resolver == null || _auth?.currentUser == null) {
+    if (_suspended || resolver == null || _auth?.currentUser == null) {
       return;
     }
 

@@ -11,8 +11,10 @@ import '../../../core/widgets/section_eyebrow.dart';
 
 /// The shared frame for log in, registration and password reset.
 ///
-/// Keeps the three screens visually identical above the fold so moving
-/// between them feels like one flow rather than three pages.
+/// Keeps every auth screen visually identical above the fold, so moving
+/// between them feels like one flow rather than a handful of pages: the same
+/// navy gradient, the same gold bloom behind the heading, the same staggered
+/// reveal of whatever sits below it.
 class AuthScaffold extends StatelessWidget {
   const AuthScaffold({
     required this.eyebrow,
@@ -20,6 +22,7 @@ class AuthScaffold extends StatelessWidget {
     required this.subtitle,
     required this.children,
     this.onBack,
+    this.indicator,
     super.key,
   });
 
@@ -31,6 +34,10 @@ class AuthScaffold extends StatelessWidget {
   final List<Widget> children;
 
   final VoidCallback? onBack;
+
+  /// Sits above the heading. Registration puts its step indicator here so all
+  /// three steps carry it in the same place.
+  final Widget? indicator;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +60,10 @@ class AuthScaffold extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     if (onBack != null) _backRow(),
+                    if (indicator != null) ...<Widget>[
+                      AnimatedReveal(index: 0, child: indicator!),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
                     const AnimatedReveal(
                       index: 0,
                       child: Align(
