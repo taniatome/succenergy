@@ -1,13 +1,11 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { LocalizedText } from './localized_text.model.js';
 
 /**
- * `users/{uid}/sessions/{sessionId}/messages/{messageId}`
+ * Table `chat_messages`, one row per message, keyed to `coaching_sessions`
+ * with `on delete cascade`.
  *
- * A subcollection rather than an array on the session, because a long
- * conversation would outgrow the 1 MiB document limit and because the coach
- * appends one message at a time.
+ * There is no `message_count` on the session: it is `count(*)` over this
+ * table, and a stored copy is one more thing that can drift.
  */
 
 /** Who wrote a message. Dart: MessageAuthor. */
@@ -20,7 +18,7 @@ export interface ChatMessageDocument {
   /** Locale map, matching Dart `ChatMessage.text`. */
   text: LocalizedText;
 
-  sentAt: Timestamp;
+  sentAt: Date;
 }
 
 export interface ChatMessageResult {

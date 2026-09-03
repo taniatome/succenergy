@@ -1,22 +1,19 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { ChatMessageResult } from './chat_message.model.js';
 import type { LocalizedText } from './localized_text.model.js';
 import type { Principle } from './principle.model.js';
 
 /**
- * `users/{uid}/sessions/{sessionId}`
+ * Table `coaching_sessions`.
  *
  * A conversation with the coach, as listed on Coaching History. Duration is
- * derived from the two timestamps rather than stored, so it cannot drift;
- * `messageCount` is denormalised because the list renders it without opening
- * the messages subcollection.
+ * derived from the two timestamps rather than stored, so it cannot drift, and
+ * `messageCount` is counted from `chat_messages` rather than kept on the row.
  */
 export interface CoachingSessionDocument {
-  startedAt: Timestamp;
+  startedAt: Date;
 
   /** Null while the conversation is still open. */
-  endedAt: Timestamp | null;
+  endedAt: Date | null;
 
   /** The one-line summary shown in the list. */
   summary: LocalizedText;
@@ -41,12 +38,12 @@ export interface CoachingSessionResult {
 }
 
 export function sessionDurationMinutes(
-  startedAt: Timestamp,
-  endedAt: Timestamp | null,
+  startedAt: Date,
+  endedAt: Date | null,
 ): number {
   if (endedAt === null) {
     return 0;
   }
-  const elapsedMs = endedAt.toMillis() - startedAt.toMillis();
+  const elapsedMs = endedAt.getTime() - startedAt.getTime();
   return Math.max(0, Math.round(elapsedMs / 60_000));
 }

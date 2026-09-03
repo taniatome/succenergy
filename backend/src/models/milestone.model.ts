@@ -1,21 +1,19 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { LocalizedText } from './localized_text.model.js';
 
 /**
  * A dated checkpoint on the way to a goal.
  *
- * Embedded in the goal document rather than kept in a subcollection, because
- * the Dart `Goal` carries `milestones` as a list and every screen that shows
- * a milestone already has the goal loaded.
+ * Table `milestones`, keyed to `goals` with `on delete cascade`. Presented as
+ * a list on the goal, because the Dart `Goal` carries `milestones` as one and
+ * every screen that shows a milestone already has the goal loaded.
  */
 export interface MilestoneEntry {
   id: string;
   title: LocalizedText;
-  dueDate: Timestamp;
+  dueDate: Date;
 
   /** Null while the milestone is still ahead of the user. */
-  reachedAt: Timestamp | null;
+  reachedAt: Date | null;
 }
 
 export interface MilestoneResult {

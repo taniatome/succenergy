@@ -1,5 +1,3 @@
-import { Timestamp } from 'firebase-admin/firestore';
-
 import { auth } from '../config/firebase.js';
 import { logger } from '../config/logger.js';
 import { DEFAULT_LOCALE } from '../models/locale.model.js';
@@ -12,21 +10,21 @@ import { FIRST_PRINCIPLE } from '../models/principle.model.js';
 import { DEFAULT_COACHING_PREFERENCES } from '../models/user.model.js';
 import type { UserDocument, UserResponse } from '../models/user.model.js';
 import { UserNotFoundError, userRepository } from '../repositories/user.repository.js';
-import type { UserRepository } from '../repositories/user.repository.js';
+import type { UserPatch, UserRepository } from '../repositories/user.repository.js';
 import type {
   CreateProfileInput,
   SaveOnboardingInput,
   UpdateProfileInput,
 } from '../schemas/user.schema.js';
 import { ApiError } from '../utils/api_error.js';
-import { fromIso, toIso, toIsoRequired } from '../utils/timestamps.js';
 
 /**
  * User business logic.
  *
  * No Express types cross this boundary in either direction: the service takes
  * validated input and returns response shapes, and knows nothing about
- * requests, headers or status codes beyond the ApiErrors it throws.
+ * requests, headers or status codes beyond the ApiErrors it throws. It knows
+ * nothing about the database either — no SQL, no column names, no `pg`.
  */
 
 /** The caller, as the auth middleware resolved it. */
@@ -34,6 +32,18 @@ export interface Caller {
   uid: string;
   email: string | null;
 }
+
+/** ISO 8601 string to `Date`, tolerating absent and unparseable input. */
+function parseIso(value: string | null | undefined): Date | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+const toIso = (value: Date | null): string | null =>
+  value === null ? null : value.toISOString();
 
 export class UserService {
   private readonly users: UserRepository;
@@ -47,8 +57,8 @@ export class UserService {
   /**
    * Stored document to API response.
    *
-   * The one place Timestamps become ISO strings, so a Timestamp cannot reach
-   * a client by being forgotten at a call site.
+   * The one place `Date`s become ISO strings, so a raw Date cannot reach a
+   * client by being forgotten at a call site.
    */
   private toResponse(uid: string, document: UserDocument): UserResponse {
     return {
@@ -67,8 +77,8 @@ export class UserService {
       coachingPreferences: document.coachingPreferences,
 
       // The Dart model calls the account creation time joinedAt.
-      joinedAt: toIsoRequired(document.createdAt),
-      updatedAt: toIsoRequired(document.updatedAt),
+      joinedAt: document.createdAt.toISOString(),
+      updatedAt: document.updatedAt.toISOString(),
     };
   }
 
@@ -84,7 +94,7 @@ export class UserService {
       motivationBalance: document.motivationBalance,
       successVision: document.successVision,
       completedAt: toIso(document.completedAt),
-      updatedAt: toIsoRequired(document.updatedAt),
+      updatedAt: document.updatedAt.toISOString(),
       isComplete: UserService.isOnboardingComplete(document),
     };
   }
@@ -112,14 +122,14 @@ export class UserService {
   /**
    * The caller's profile. A pure read: it never writes.
    *
-   * A uid with no document is a 404 rather than an implicit create, because a
-   * GET that creates a resource is neither safe nor idempotent — retries,
+   * A uid with no row is a 404 rather than an implicit create, because a GET
+   * that creates a resource is neither safe nor idempotent — retries,
    * prefetches and intermediaries all assume a GET has no side effects. The
    * `profile_not_found` code tells the client to call `POST /v1/me` instead of
    * having to infer it from a bare 404.
    */
   async getProfile(caller: Caller): Promise<UserResponse> {
-    const existing = await this.users.findById(caller.uid);
+    const existing = await this.users.findProfile(caller.uid);
     if (!existing) {
       throw new ApiError(
         404,
@@ -128,7 +138,7 @@ export class UserService {
       );
     }
 
-    return this.toResponse(caller.uid, existing);
+    return this.toResponse(caller.uid, existing.user);
   }
 
   /**
@@ -137,55 +147,56 @@ export class UserService {
    * Registration happens client-side against Firebase Auth, so the first
    * authenticated request is the first this backend has heard of an account.
    *
-   * An existing document is returned as-is rather than treated as a conflict
-   * or overwritten: the client may retry a call whose response it never saw,
-   * and a retry must be harmless. `created` lets the controller answer 201 on
-   * a real creation and 200 on a repeat, so the caller can tell them apart.
+   * One call, not a read-then-write: the repository's insert is
+   * `on conflict do nothing`, so an existing row is returned as-is rather
+   * than treated as a conflict or overwritten. The client may retry a call
+   * whose response it never saw, and a retry must be harmless. `created` lets
+   * the controller answer 201 on a real creation and 200 on a repeat, so the
+   * caller can tell them apart.
    */
   async createProfile(
     caller: Caller,
     input: CreateProfileInput = {},
   ): Promise<{ profile: UserResponse; created: boolean }> {
-    const existing = await this.users.findById(caller.uid);
-    if (existing) {
-      return { profile: this.toResponse(caller.uid, existing), created: false };
-    }
-
     const document = this.buildNewUser(caller, input);
 
+    let user: UserDocument;
+    let created: boolean;
+
     try {
-      await this.users.create(caller.uid, document);
+      ({ user, created } = await this.users.create(caller.uid, document));
     } catch (cause) {
-      // Two first requests can race. The loser re-reads rather than failing:
-      // both callers are the same person and both want the same document.
-      const raced = await this.users.findById(caller.uid);
-      if (raced) {
-        return { profile: this.toResponse(caller.uid, raced), created: false };
-      }
       throw ApiError.internal('Could not create user profile', cause);
     }
 
-    logger.info({ uid: caller.uid }, 'Created user profile');
-    return { profile: this.toResponse(caller.uid, document), created: true };
+    if (created) {
+      logger.info({ uid: caller.uid }, 'Created user profile');
+    }
+
+    return { profile: this.toResponse(caller.uid, user), created };
   }
 
   /**
-   * The document a brand-new account starts with.
+   * The row a brand-new account starts with.
    *
    * Everything the client did not supply takes a defined default rather than
    * being left absent, so no reader downstream has to handle a missing field.
    * The cycle starts on Purpose at day one, which is where the methodology
    * begins.
+   *
+   * `createdAt` and `updatedAt` are placeholders: the columns have
+   * `default now()` and the repository does not send them, so what comes back
+   * from the insert is the database's own clock rather than this process's.
    */
   private buildNewUser(caller: Caller, input: CreateProfileInput): UserDocument {
-    const now = Timestamp.now();
+    const now = new Date();
 
     return {
       name: input.name ?? '',
       email: caller.email ?? '',
       preferredLanguage: input.preferredLanguage ?? DEFAULT_LOCALE,
       activity: input.activity ?? 'professional',
-      dateOfBirth: fromIso(input.dateOfBirth),
+      dateOfBirth: parseIso(input.dateOfBirth),
       countryCode: input.countryCode ?? null,
       acceptedTerms: input.acceptedTerms ?? false,
       confirmedInfoTrue: input.confirmedInfoTrue ?? false,
@@ -201,13 +212,15 @@ export class UserService {
   /**
    * Applies a profile patch.
    *
-   * Coaching preferences are flattened to dotted field paths rather than
-   * written as a nested object, because Firestore replaces a nested map
-   * wholesale — patching only `tone` would otherwise drop `rhythm` and
-   * `remindersEnabled`.
+   * The patch goes down as the domain shape, nested coaching preferences
+   * included. Flattening it to columns is the repository's job — under
+   * Firestore this method had to build dotted field paths by hand, because a
+   * nested map was otherwise replaced wholesale and patching `tone` would
+   * drop `rhythm` and `remindersEnabled`. That was database detail in a
+   * service, and it is gone.
    */
   async updateProfile(caller: Caller, input: UpdateProfileInput): Promise<UserResponse> {
-    const patch: Record<string, unknown> = {};
+    const patch: UserPatch = {};
 
     if (input.name !== undefined) {
       patch.name = input.name;
@@ -219,23 +232,13 @@ export class UserService {
       patch.activity = input.activity;
     }
     if (input.dateOfBirth !== undefined) {
-      patch.dateOfBirth = fromIso(input.dateOfBirth);
+      patch.dateOfBirth = parseIso(input.dateOfBirth);
     }
     if (input.countryCode !== undefined) {
       patch.countryCode = input.countryCode;
     }
-
-    const preferences = input.coachingPreferences;
-    if (preferences) {
-      if (preferences.tone !== undefined) {
-        patch['coachingPreferences.tone'] = preferences.tone;
-      }
-      if (preferences.rhythm !== undefined) {
-        patch['coachingPreferences.rhythm'] = preferences.rhythm;
-      }
-      if (preferences.remindersEnabled !== undefined) {
-        patch['coachingPreferences.remindersEnabled'] = preferences.remindersEnabled;
-      }
+    if (input.coachingPreferences) {
+      patch.coachingPreferences = input.coachingPreferences;
     }
 
     if (Object.keys(patch).length === 0) {
@@ -244,17 +247,6 @@ export class UserService {
 
     try {
       const updated = await this.users.update(caller.uid, patch);
-
-      // The repository merges dotted paths as literal keys, which is right
-      // for Firestore and wrong for a response body, so preferences are
-      // rebuilt from the values just written.
-      if (preferences) {
-        updated.coachingPreferences = {
-          ...updated.coachingPreferences,
-          ...preferences,
-        };
-      }
-
       return this.toResponse(caller.uid, updated);
     } catch (cause) {
       if (cause instanceof UserNotFoundError) {
@@ -267,11 +259,11 @@ export class UserService {
   // --- Onboarding ---------------------------------------------------------
 
   async getOnboarding(caller: Caller): Promise<OnboardingResponseResult> {
-    const document = await this.users.findOnboarding(caller.uid);
-    if (!document) {
+    const profile = await this.users.findProfile(caller.uid);
+    if (!profile?.onboarding) {
       throw ApiError.notFound('Onboarding response not found');
     }
-    return this.toOnboardingResult(document);
+    return this.toOnboardingResult(profile.onboarding);
   }
 
   /**
@@ -285,7 +277,6 @@ export class UserService {
     caller: Caller,
     input: SaveOnboardingInput,
   ): Promise<OnboardingResponseResult> {
-    const now = Timestamp.now();
     const complete = UserService.isOnboardingComplete(input);
 
     const document: OnboardingResponseDocument = {
@@ -296,23 +287,20 @@ export class UserService {
       mainGoals: input.mainGoals,
       motivationBalance: input.motivationBalance,
       successVision: input.successVision,
-      completedAt: complete ? now : null,
-      updatedAt: now,
+      completedAt: complete ? new Date() : null,
+      updatedAt: new Date(),
     };
 
-    // The onboarding document lives under the user document, so the user has
-    // to exist first. A client that reached the assessment has already been
-    // through registration, but creating here rather than 404-ing keeps a
-    // submitted assessment from being lost to a missed POST /v1/me.
+    // The onboarding row references the user row, so the user has to exist
+    // first. A client that reached the assessment has already been through
+    // registration, but creating here rather than 404-ing keeps a submitted
+    // assessment from being lost to a missed POST /v1/me.
     await this.createProfile(caller);
-    await this.users.saveOnboarding(caller.uid, document);
+    const stored = await this.users.saveOnboarding(caller.uid, document);
 
-    logger.info(
-      { uid: caller.uid, isComplete: complete },
-      'Saved onboarding response',
-    );
+    logger.info({ uid: caller.uid, isComplete: complete }, 'Saved onboarding response');
 
-    return this.toOnboardingResult(document);
+    return this.toOnboardingResult(stored);
   }
 
   // --- Deletion -----------------------------------------------------------
@@ -320,17 +308,17 @@ export class UserService {
   /**
    * Deletes the account and everything belonging to it.
    *
-   * Order is deliberate. Firestore first, because that is where the coaching
-   * memory the client's checklist names lives and it is the part that must
-   * not survive; the Auth record second, which revokes every outstanding
-   * token and makes the deletion take effect immediately rather than at the
-   * next token expiry.
+   * Order is deliberate. The database first, because that is where the
+   * coaching memory the client's checklist names lives and it is the part
+   * that must not survive; the Auth record second, which revokes every
+   * outstanding token and makes the deletion take effect immediately rather
+   * than at the next token expiry.
    *
-   * If the Firestore sweep fails, the Auth record is left alone so the user
-   * can still authenticate and retry. If the Auth deletion fails after the
-   * data is gone, that is reported as a partial failure rather than a
-   * success: an Auth record with no data behind it would let the next request
-   * create a fresh empty profile and look like the delete had not run.
+   * If the delete fails, the Auth record is left alone so the user can still
+   * authenticate and retry. If the Auth deletion fails after the data is
+   * gone, that is reported as a partial failure rather than a success: an
+   * Auth record with no data behind it would let the next request create a
+   * fresh empty profile and look like the delete had not run.
    */
   async deleteAccount(caller: Caller): Promise<{ documentsDeleted: number }> {
     let result: { documentsDeleted: number };

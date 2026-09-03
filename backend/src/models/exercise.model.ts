@@ -2,10 +2,11 @@ import type { LocalizedText } from './localized_text.model.js';
 import type { Principle } from './principle.model.js';
 
 /**
- * `exercises/{exerciseId}` — the shared, admin-managed exercise library.
+ * Tables `exercises` and `exercise_steps` — the shared, admin-managed
+ * exercise library.
  *
  * Not per-user: the same exercises are offered to everyone, and what a
- * particular person answered lives in `users/{uid}/exerciseResponses`.
+ * particular person answered lives in `exercise_responses`.
  * Exercise sessions in the app are driven entirely from `steps`; no exercise
  * content is ever hardcoded into a widget, so every prompt is bilingual here.
  */

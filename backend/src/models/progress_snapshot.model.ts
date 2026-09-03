@@ -1,14 +1,12 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 /**
- * `users/{uid}/progressSnapshots/{yyyy-mm-dd}`
+ * Table `progress_snapshots`, primary key `(user_id, date)`.
  *
- * One day of recorded activity, used by the Progress charts. The document id
- * is the calendar date so a day can only be recorded once and a date range
- * reads as a key range with no index.
+ * One day of recorded activity, used by the Progress charts. The calendar
+ * date is half the primary key, so a day can only be recorded once and a date
+ * range is a key range with no extra index.
  */
 export interface ProgressSnapshotDocument {
-  date: Timestamp;
+  date: Date;
 
   /** Average completion across active goals on this date, 0 to 1. */
   goalCompletion: number;

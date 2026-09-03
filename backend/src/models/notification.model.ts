@@ -1,13 +1,9 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { LocalizedText } from './localized_text.model.js';
 
 /**
- * `users/{uid}/notifications/{notificationId}`
+ * Table `notifications`.
  *
- * The notification inbox. Bodies are stored in both languages because a
- * notification written when the user read English is still in the inbox
- * after they switch to Portuguese.
+ * The notification inbox.
  */
 
 /** The kinds of notification sent, each with its own icon treatment. */
@@ -27,7 +23,7 @@ export interface NotificationDocument {
   body: LocalizedText;
 
   /** Dart `AppNotification.receivedAt`. */
-  receivedAt: Timestamp;
+  receivedAt: Date;
 
   isRead: boolean;
 }

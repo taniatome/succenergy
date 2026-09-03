@@ -1,12 +1,10 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { LocalizedText } from './localized_text.model.js';
 import type { Principle } from './principle.model.js';
 
 /**
- * `users/{uid}/exerciseResponses/{responseId}`
+ * Table `exercise_responses`.
  *
- * One document per completed run of an exercise, rather than one per answered
+ * One row per completed run of an exercise, rather than one per answered
  * step: a session is reviewed as a whole, so the whole session is one read.
  * `stepResponses` is keyed by the step id (or its `saveAs`) and holds what the
  * user entered — free text, the chosen option label, or a scale value
@@ -34,7 +32,7 @@ export interface ExerciseResponseDocument {
    */
   suggestedAction: LocalizedText;
 
-  completedAt: Timestamp;
+  completedAt: Date;
 }
 
 export interface ExerciseResponseResult

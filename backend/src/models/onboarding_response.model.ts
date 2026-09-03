@@ -1,9 +1,7 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { LocalizedText } from './localized_text.model.js';
 
 /**
- * `users/{uid}/onboarding/response`
+ * Table `onboarding_responses`, one row per user.
  *
  * The seven answers captured across the pre-registration quiz (Q1-Q3) and the
  * post-registration assessment (Q4-Q7). Shown back on the closing summary and
@@ -37,9 +35,9 @@ export interface OnboardingResponseDocument {
   successVision: LocalizedText;
 
   /** Null while the assessment is still partial, e.g. quiz answers only. */
-  completedAt: Timestamp | null;
+  completedAt: Date | null;
 
-  updatedAt: Timestamp;
+  updatedAt: Date;
 }
 
 export interface OnboardingResponseBody {

@@ -1,12 +1,11 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { LocaleCode } from './locale.model.js';
 import type { Principle } from './principle.model.js';
 
 /**
- * `users/{uid}`
+ * Table `users`, keyed by the Firebase Auth uid.
  *
- * Field names follow `lib/data/models/user.dart` so the API and the app agree
+ * Columns are snake_case and the repository maps them; the names below are
+ * the camelCase side. Field names follow `lib/data/models/user.dart` so the API and the app agree
  * without a translation layer. Multi-word enum values go over the wire in
  * snake_case, matching the activity values the client's data model specifies.
  */
@@ -35,7 +34,7 @@ export interface CoachingPreferences {
   remindersEnabled: boolean;
 }
 
-/** The stored user document. Timestamps are Firestore-native. */
+/** The stored user document. Timestamps are native `Date`s, as Postgres returns them. */
 export interface UserDocument {
   /** Dart `User.name`. Written by the client at registration. */
   name: string;
@@ -47,7 +46,7 @@ export interface UserDocument {
   activity: UserActivity;
 
   /** Captured at registration; null on accounts created before the field. */
-  dateOfBirth: Timestamp | null;
+  dateOfBirth: Date | null;
 
   /** ISO 3166-1 alpha-2 code chosen at registration. Dart `countryCode`. */
   countryCode: string | null;
@@ -66,8 +65,8 @@ export interface UserDocument {
 
   coachingPreferences: CoachingPreferences;
 
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 /** What the API returns. Dates are ISO 8601 strings. */

@@ -1,10 +1,8 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 /**
- * `users/{uid}/subscription/current`
+ * Table `subscriptions`, one row per user, keyed by `user_id`.
  *
- * A fixed document id rather than a collection of subscription records: there
- * is one current state per account, and billing history lives with the store.
+ * One current state per account rather than a history of records: billing
+ * history lives with the store.
  * Written only by this backend from verified RevenueCat webhooks — never by
  * the client, which is why nothing here is patchable through /v1/me.
  *
@@ -48,9 +46,9 @@ export interface SubscriptionDocument {
   tier: SubscriptionTier;
   status: SubscriptionStatus;
 
-  trialStartedAt: Timestamp | null;
-  trialEndsAt: Timestamp | null;
-  currentPeriodEnd: Timestamp | null;
+  trialStartedAt: Date | null;
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date | null;
 
   provider: SubscriptionStore;
 
@@ -71,7 +69,7 @@ export interface SubscriptionDocument {
    */
   entitlementId: string | null;
 
-  updatedAt: Timestamp;
+  updatedAt: Date;
 }
 
 export interface SubscriptionResult {

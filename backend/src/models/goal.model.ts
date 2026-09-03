@@ -1,16 +1,15 @@
-import type { Timestamp } from 'firebase-admin/firestore';
-
 import type { ActionItemEntry } from './action_item.model.js';
 import type { LocalizedText } from './localized_text.model.js';
 import type { MilestoneEntry, MilestoneResult } from './milestone.model.js';
 import type { Principle } from './principle.model.js';
 
 /**
- * `users/{uid}/goals/{goalId}`
+ * Table `goals`, with `milestones` and `action_items` as child tables.
  *
- * Milestones and actions are embedded arrays, matching the shape the Dart
- * `Goal` uses. Status is derived from `completedAt` rather than stored
- * alongside it, so the two can never disagree.
+ * The Dart `Goal` carries milestones and actions as lists, so the repository
+ * that builds this document will join them back into arrays. Status is
+ * derived from `completedAt` rather than stored alongside it, so the two can
+ * never disagree — there is no `is_completed` column.
  */
 
 export const GOAL_STATUSES = ['active', 'completed'] as const;
@@ -23,15 +22,15 @@ export interface GoalDocument {
   why: LocalizedText;
 
   principle: Principle;
-  targetDate: Timestamp;
+  targetDate: Date;
   milestones: MilestoneEntry[];
   actions: ActionItemEntry[];
 
   /** Null while the goal is active. The single source of completion. */
-  completedAt: Timestamp | null;
+  completedAt: Date | null;
 
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface GoalResult {
@@ -56,7 +55,7 @@ export interface GoalResult {
 /** Completion from 0 to 1, derived from milestones reached. */
 export function goalProgress(
   milestones: readonly MilestoneEntry[],
-  completedAt: Timestamp | null,
+  completedAt: Date | null,
 ): number {
   if (completedAt !== null) {
     return 1;
