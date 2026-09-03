@@ -11,9 +11,8 @@ emulator-data
 *.log
 README.md
 scripts
+migrations
 firebase.json
 .firebaserc
-firestore.rules
-firestore.indexes.json
 eslint.config.js
 tsconfig.scripts.json

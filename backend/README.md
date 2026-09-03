@@ -1,24 +1,23 @@
 # Succenergy AI Coach — Backend
 
 The API behind the Succenergy AI Coach app. TypeScript and Express on Cloud
-Run, Firestore for application data, Firebase Auth for authentication, and
-Google Secret Manager for every secret.
+Run, **Postgres (Supabase)** for application data and the RAG vector store,
+Firebase Auth for authentication, and Google Secret Manager for every secret.
 
-Built and verified against the **Firebase Local Emulator Suite**. Billing is
-now attached to the GCP project and Firestore exists in **`nam5`** (US
-multi-region), so nothing about the project blocks a deploy any more — but
-**nothing has been deployed**. The machine this was built on has no `gcloud`
-CLI and no working Docker daemon, and the Firebase account signed in on it has
-read-only access to the project. See
-[Deploying to Cloud Run](#deploying-to-cloud-run) for the exact sequence, the
-confirmed region, and the IAM roles needed to run it.
+**Deployed:** https://succenergy-api-4612920383.us-east1.run.app
+
+Firestore is gone. Supabase Postgres is the single database — application
+tables and, from migration 002, the embeddings the coach will retrieve from.
+Firebase's remaining job is verifying ID tokens, and later FCM.
 
 ---
 
 ## Contents
 
 - [Quick start](#quick-start)
-- [Running the emulators](#running-the-emulators)
+- [Local development: getting a database](#local-development-getting-a-database)
+- [Migrations](#migrations)
+- [Running the Auth emulator](#running-the-auth-emulator)
 - [Running the server](#running-the-server)
 - [Getting a token for curl](#getting-a-token-for-curl)
 - [Seeding the test persona](#seeding-the-test-persona)
@@ -26,10 +25,10 @@ confirmed region, and the IAM roles needed to run it.
 - [Environment variables](#environment-variables)
 - [The layer rule](#the-layer-rule)
 - [Project structure](#project-structure)
-- [Firestore data model](#firestore-data-model)
+- [Data model](#data-model)
 - [Field naming: where this differs from the brief](#field-naming-where-this-differs-from-the-brief)
 - [Enum wire values](#enum-wire-values)
-- [Firestore rules and indexes](#firestore-rules-and-indexes)
+- [Row level security](#row-level-security)
 - [Secrets](#secrets)
 - [Security decisions](#security-decisions)
 - [Docker](#docker)
@@ -40,19 +39,21 @@ confirmed region, and the IAM roles needed to run it.
 
 ## Quick start
 
-You need **Node 22+**, **Java 11+** (the Firestore emulator is a Java process)
-and **Docker** only if you want to build the image.
+You need **Node 22+**, a **Postgres database** (see below) and **Docker** only
+if you want to build the image. Java is no longer needed — that was the
+Firestore emulator.
 
 ```bash
 cd backend
 npm install
 cp .env.example .env      # then fill it in — see Environment variables
+npm run migrate           # create the schema
 ```
 
 Then, in **two terminals**:
 
 ```bash
-# Terminal 1 — the emulators. Leave this running.
+# Terminal 1 — the Auth emulator. Leave this running.
 npm run emulators
 
 # Terminal 2 — the API
@@ -66,17 +67,18 @@ curl http://127.0.0.1:8787/v1/health
 curl http://127.0.0.1:8787/v1/health/ready
 ```
 
-`/v1/health/ready` round-trips a Firestore read, so a 200 there means the
-emulators and the API found each other.
+`/v1/health/ready` round-trips `select 1`, so a 200 there means the API found
+the database.
 
 ### Scripts
 
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | API with reload, reading `.env` |
-| `npm run dev:emulated` | Same, but forces both emulator hosts regardless of `.env` |
-| `npm run emulators` | Auth + Firestore emulators and the emulator UI |
-| `npm run seed` | Writes the test persona into the Firestore emulator |
+| `npm run dev:emulated` | Same, but forces the Auth emulator host regardless of `.env` |
+| `npm run emulators` | Firebase Auth emulator and the emulator UI |
+| `npm run migrate` | Applies pending SQL migrations. Safe to re-run. |
+| `npm run seed` | Writes the test persona into the database |
 | `npm run token` | Prints a Firebase ID token for the test user |
 | `npm run build` | Compiles TypeScript to `dist/` |
 | `npm start` | Runs the compiled output (what the container does) |
@@ -85,29 +87,113 @@ emulators and the API found each other.
 
 ---
 
-## Running the emulators
+## Local development: getting a database
+
+Two options. Both need **pgvector** for migration 002 — the extension the RAG
+table's `vector(1024)` column depends on.
+
+### Option A — a personal free Supabase project
+
+Closest to production, and pgvector is available on every Supabase project.
+
+1. Create a free project at supabase.com. It is *yours*, not the client's —
+   never point local development at the client's database.
+2. Project Settings → Database → Connection string → **Transaction pooler**
+   (port 6543).
+3. Put it in `.env` as `DATABASE_URL`.
+4. Database → Extensions → enable `vector`. Migration 002 also declares it,
+   but the dashboard toggle is the reliable path on a fresh project.
+
+### Option B — Docker
+
+Use the **`pgvector/pgvector`** image rather than plain `postgres`; the
+official Postgres image does not ship the extension, and migration 002 stops
+at `create extension vector` without it.
+
+```bash
+docker run -d --name succenergy-pg \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=succenergy \
+  -p 5432:5432 \
+  pgvector/pgvector:pg16
+```
+
+```
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/succenergy?sslmode=disable
+```
+
+`?sslmode=disable` is required here: a local Postgres container has no
+certificate and refuses the SSL handshake, while TLS is on by default because
+the connection that matters is the one to Supabase.
+
+Then `npm run migrate`.
+
+---
+
+## Migrations
+
+Plain numbered SQL files in `backend/migrations/`, applied by
+`scripts/migrate.ts`.
+
+```bash
+npm run migrate
+```
+
+| File | What it creates |
+| --- | --- |
+| `001_initial_schema.sql` | Every application table, its indexes, the `updated_at` trigger, and RLS |
+| `002_rag_embeddings.sql` | `knowledge_chunks` and the pgvector extension. Empty — the knowledge base has not arrived. |
+
+**No migration framework.** The client has Supabase connected to a GitHub repo
+and has not yet said whether migrations should run through that integration.
+Plain SQL works either way — through the integration, through this script, or
+pasted into Supabase's SQL editor — and stays readable to someone who wants to
+see what the schema is, which the client has asked for.
+
+How the script behaves:
+
+- Applied filenames go into `schema_migrations` with a checksum. An applied
+  file is skipped, so **re-running does nothing**.
+- Each migration runs in its own transaction along with the row that records
+  it. A migration that fails partway leaves the database exactly as it was and
+  is **not** marked applied — so fixing the cause and re-running is the whole
+  recovery procedure.
+- A transaction-scoped advisory lock serialises concurrent runs. Transaction
+  scoped rather than session scoped, because Supabase's transaction pooler
+  does not keep a session across statements.
+- **Editing an applied migration is refused.** Two databases would silently
+  end up with different schemas. Add a new numbered file instead.
+
+### Adding a table
+
+Add a new numbered file. Three things a new per-user table needs:
+
+1. `user_id text not null references users(id) on delete cascade` — this is
+   what keeps account deletion a single statement.
+2. An index on `user_id`, plus whatever it is filtered or sorted by.
+3. `alter table <name> enable row level security;` with **no policy**.
+
+There is no list to remember to update. Under Firestore there was
+(`USER_SUBCOLLECTIONS`), and forgetting it orphaned data on delete.
+
+---
+
+## Running the Auth emulator
 
 **`npm run emulators` must be running in a second terminal for local
-development.** Nothing that touches Firestore or Auth works without it.
+development.** Token verification does not work without it.
 
 | Emulator | Address |
 | --- | --- |
-| Firestore | `127.0.0.1:8080` |
 | Auth | `127.0.0.1:9099` |
 | Emulator UI | http://127.0.0.1:4000 |
 
-Ports are pinned in `firebase.json` so the npm scripts, the seed script and
-the token script can all assume the same addresses.
+There is no Firestore emulator any more, and Postgres has no emulator — it is
+simply a different `DATABASE_URL`. That also means **local data survives
+restarting the emulator**, which Firestore's in-memory emulator did not: no
+re-seed after every restart.
 
-The emulator UI at :4000 is the fastest way to see what the API wrote — the
-Firestore tab shows documents and subcollections, and the Auth tab shows
-accounts.
-
-Emulator data is **in memory** and gone when you stop it. Re-run `npm run
-seed` after a restart.
-
-> The local API runs on **8787**, not 8080 — the Firestore emulator holds 8080.
-> Cloud Run injects its own `PORT`, so this only matters locally.
+> The local API runs on **8787**. Cloud Run injects its own `PORT`.
 
 ---
 
@@ -115,25 +201,44 @@ seed` after a restart.
 
 `npm run dev` uses `tsx watch` and reloads on save.
 
-Boot fails immediately, before the server listens, if the environment is
-wrong. `src/config/env.ts` validates everything with Zod at import time and
-prints the offending **variable names** — never their values, which may be
-credentials:
+Boot fails immediately, before the server listens, in two cases.
+
+**A bad environment.** `src/config/env.ts` validates everything with Zod at
+import time and prints the offending **variable names** — never their values,
+which may be credentials:
 
 ```
 Invalid environment configuration. The server will not start.
-  - GCP_PROJECT_ID: GCP_PROJECT_ID is required
-  - FIREBASE_PROJECT_ID: FIREBASE_PROJECT_ID is required
+  - DATABASE_URL: DATABASE_URL is required outside production
 
 Copy backend/.env.example to backend/.env and fill in the values.
 ```
 
-Two guards beyond presence:
+**An unreachable database.** `src/config/database.ts` connects and runs
+`select 1` before `app.listen`, in the same names-not-values style:
 
-- **The two emulator hosts must be set together.** Half-emulated is the worst
-  configuration available — one half of the app reading local data while the
-  other authenticates against production.
-- **Neither may be set when `NODE_ENV=production`.**
+```
+Cannot reach the database. The server will not start.
+  - the host, port, user or password in the connection string is wrong,
+    the database is down, or this network cannot reach it
+  - Supabase: use the transaction pooler string on port 6543, not the
+    direct connection, which is IPv6-only
+  - reported: connect ECONNREFUSED 127.0.0.1:5432
+```
+
+A service that starts without its database serves 500s until someone notices.
+Failing here means a bad Cloud Run revision never goes healthy and the
+previous one keeps serving.
+
+Two further environment guards:
+
+- **`DATABASE_URL` must be absent when `NODE_ENV=production`**, where the
+  connection string comes from Secret Manager instead. Setting it would put a
+  database credential into the Cloud Run service configuration, readable by
+  anyone with view access.
+- **`FIREBASE_AUTH_EMULATOR_HOST` must be absent in production.** A production
+  instance quietly authenticating against an emulator is worse than one that
+  will not start.
 
 ---
 
@@ -141,8 +246,8 @@ Two guards beyond presence:
 
 Auth itself — register, log in, reset password — happens **client-side** via
 the Firebase Auth SDK. This backend verifies tokens; it does not issue them.
-So to exercise an authenticated endpoint before the Flutter side is wired up,
-mint a token against the Auth emulator:
+So to exercise an authenticated endpoint, mint a token against the Auth
+emulator:
 
 ```bash
 npm run token
@@ -158,7 +263,7 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8787/v1/me
 
 On an account that has never had a profile written, that returns
 `404 profile_not_found` — `GET /v1/me` does not create anything. Either run
-`npm run seed` first, or create the document explicitly:
+`npm run seed` first, or create the row explicitly:
 
 ```bash
 curl -X POST http://127.0.0.1:8787/v1/me -H "Authorization: Bearer $TOKEN"
@@ -183,22 +288,24 @@ mint a token against a real project.
 npm run seed
 ```
 
-Writes **Marisa Chissano**, the persona from
-`lib/data/mock/mock_data.dart`, so the seeded account reads as the same person
-the Flutter build demonstrates rather than as unrelated sample rows: three
-weeks in, mid-cycle on Praxis, running a brand relaunch, bilingual throughout.
+Writes **Marisa Chissano**, the persona from `lib/data/mock/mock_data.dart`,
+so the seeded account reads as the same person the Flutter build demonstrates
+rather than as unrelated sample rows: three weeks in, mid-cycle on Praxis,
+running a brand relaunch, bilingual throughout.
 
-It writes 8 subcollections, ~32 documents and 6 chat messages nested two
-levels deep, plus 2 documents in the shared `exercises/` library. Counts in
-its report are read back from Firestore, not tallied by the script, so what it
-prints is what is actually stored.
+49 rows across twelve tables, plus 2 exercises and 5 exercise steps in the
+shared library. Counts in its report are read back from the database, not
+tallied by the script, so what it prints is what is actually stored.
 
 The account is keyed to `TEST_USER_EMAIL`, so `npm run token` returns a token
 for the seeded uid and `GET /v1/me` returns the persona rather than an empty
 profile.
 
-Re-seeding clears what the previous run left first, so a removed goal does not
-linger. Like the token script, it refuses to run outside the emulators.
+Re-seeding clears the user's data first — one `delete from users`, and the
+cascade does the rest — so a removed goal does not linger. The shared
+`exercises` library is **upserted** rather than cleared, because it is not the
+user's data. Like the token script, it refuses to run without the Auth
+emulator, or with `NODE_ENV=production`.
 
 ---
 
@@ -211,8 +318,8 @@ All under `/v1`. Every response is `{ "data": ... }`; every failure is
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/v1/health` | Liveness. Answers from process state alone, so a slow Firestore minute does not get a healthy instance restarted. |
-| `GET` | `/v1/health/ready` | Readiness. Round-trips a Firestore read; 503 when it cannot. |
+| `GET` | `/v1/health` | Liveness. Answers from process state alone, so a slow database minute does not get a healthy instance restarted. |
+| `GET` | `/v1/health/ready` | Readiness. Round-trips `select 1` against Postgres; 503 when it cannot. |
 
 ### Authenticated
 
@@ -220,8 +327,8 @@ Send `Authorization: Bearer <Firebase ID token>`.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/v1/me` | **First contact.** Creates the user document for the token's uid (201; 200 if it already exists) |
-| `GET` | `/v1/me` | Current profile. Read only — `404 profile_not_found` if there is no document yet |
+| `POST` | `/v1/me` | **First contact.** Creates the user row for the token's uid (201; 200 if it already exists) |
+| `GET` | `/v1/me` | Current profile. Read only — `404 profile_not_found` if there is no row yet |
 | `PATCH` | `/v1/me` | Update profile fields |
 | `DELETE` | `/v1/me` | Delete the account and all data |
 | `POST` | `/v1/me/onboarding` | Save the onboarding response (201) |
@@ -266,8 +373,14 @@ curl -X POST http://127.0.0.1:8787/v1/me   -H "Authorization: Bearer $TOKEN"   -
 ```
 
 **201** with the created profile. **200** with the existing profile if the
-document is already there — not a 409, and not a second write. The client may
+row is already there — not a 409, and not a second write. The client may
 retry a call whose response it never saw, and a retry has to be harmless.
+
+The insert is `on conflict (id) do nothing returning *`, so this is **atomic**
+rather than optimistic. Two first requests for the same unknown uid are
+decided once, by the database; the one that did not insert reads the winning
+row inside the same transaction. Under Firestore this was a create that could
+fail, followed by a hopeful re-read.
 
 A new account starts on **Purpose**, cycle day 1, streak 0, with the default
 coaching preferences (`direct` / `daily` / reminders on).
@@ -291,7 +404,9 @@ dropped connection followed by a retry could race on document creation.
 
 #### `GET /v1/me` is a pure read
 
-No query parameters, no writes. A uid with no document is:
+No query parameters, no writes. One query: the user row and the onboarding and
+subscription rows that hang off it come back through two left joins rather
+than three round trips. A uid with no row is:
 
 ```json
 { "error": { "code": "profile_not_found", "message": "...", "requestId": "..." } }
@@ -326,22 +441,38 @@ Deliberately **not** patchable, and rejected if sent:
 | `cycleDay`, `dayStreak`, `currentPrinciple` | Derived from recorded activity — a client cannot award itself a streak |
 
 Coaching preferences may be patched individually. Sending only `tone` leaves
-`rhythm` and `remindersEnabled` intact, because the update writes dotted field
-paths rather than replacing the nested map.
+`rhythm` and `remindersEnabled` intact: they are three separate columns, and
+the `SET` clause only names the ones actually sent. Under Firestore this
+needed dotted field paths built in the service, because a nested map was
+otherwise replaced wholesale — that workaround is gone.
 
 #### `DELETE /v1/me` cascades
 
 ```json
-{ "data": { "deleted": true, "documentsDeleted": 39 } }
+{ "data": { "deleted": true, "documentsDeleted": 49 } }
 ```
 
-Firestore does **not** cascade: deleting a document leaves its subcollections
-in place, still readable by direct path and invisible to a collection listing.
-So the delete walks every subcollection explicitly — including the `messages`
-nested under each session — and removes the Firebase Auth record last.
+```sql
+delete from users where id = $1;
+```
 
-Order matters. Firestore is swept first, because that is where the coaching
-memory lives and it is the part that must not survive. If the sweep fails the
+That is the whole thing. Every child table references `users(id)` with
+`on delete cascade`, so goals, milestones, action items, exercise responses,
+coaching sessions, chat messages, purpose answers, notifications, the
+subscription, the onboarding response and the progress snapshots go with it —
+and the application code names none of them. This is the single biggest gain
+over Firestore, which does not cascade at all: deleting a document there left
+its subcollections in place, readable by direct path and invisible to a
+collection listing, so the delete had to walk every one of them by hand from a
+list that a new subcollection had to be remembered into.
+
+`documentsDeleted` keeps its name for contract compatibility and now counts
+rows. The dependent rows are counted in the same transaction, immediately
+before the delete, so the number is accurate and reveals nothing about what
+the rows contained.
+
+Order still matters. The database first, because that is where the coaching
+memory lives and it is the part that must not survive. If the delete fails the
 Auth record is untouched, so the user can still authenticate and retry. If the
 Auth deletion fails after the data is gone, the response is
 `500 partial_deletion` rather than success — an Auth record with no data
@@ -391,12 +522,12 @@ committed.
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `NODE_ENV` | no | `development` \| `test` \| `production`. Default `development`. |
-| `PORT` | no | Default `8080`. Locally use `8787` — 8080 is the Firestore emulator's. Cloud Run injects this. |
+| `PORT` | no | Default `8080`. Locally use `8787`. Cloud Run injects this. |
+| `DATABASE_URL` | **outside production** | Postgres connection string. **Must be absent in production**, where it comes from Secret Manager. |
 | `GCP_PROJECT_ID` | **yes** | `succenergy-ai-coach` |
 | `FIREBASE_PROJECT_ID` | **yes** | `succenergy-ai-coach` |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated. Empty means no browser origin is allowed. |
 | `LOG_LEVEL` | no | `fatal`…`trace`, or `silent`. Default `info`. |
-| `FIRESTORE_EMULATOR_HOST` | no | Set to `127.0.0.1:8080` locally. **Must be absent in production.** |
 | `FIREBASE_AUTH_EMULATOR_HOST` | no | Set to `127.0.0.1:9099` locally. **Must be absent in production.** |
 | `TEST_USER_EMAIL` | no | Emulator-only test account for the scripts |
 | `TEST_USER_PASSWORD` | no | Emulator-only. Never a real user's password. |
@@ -406,11 +537,11 @@ A working local `.env`:
 ```
 NODE_ENV=development
 PORT=8787
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/succenergy?sslmode=disable
 GCP_PROJECT_ID=succenergy-ai-coach
 FIREBASE_PROJECT_ID=succenergy-ai-coach
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 LOG_LEVEL=debug
-FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
 TEST_USER_EMAIL=test.user@example.com
 TEST_USER_PASSWORD=emulator-only-password
@@ -421,49 +552,80 @@ app is a native client, sends no `Origin`, and is unaffected by CORS entirely.
 
 ### How credentials are resolved
 
-`src/config/firebase.ts` is the **only** file that knows whether we are
-emulated. Nothing below the config layer branches on environment.
+**The database.** `src/config/database.ts` is the only file that constructs a
+pool, and the only one that knows where the connection string came from.
 
-- **Both emulator hosts set** → the Admin SDK routes to the emulators on its
-  own and accepts any project id with no credentials, so it initialises with
-  the project id alone.
-- **Neither set** → Application Default Credentials: the attached service
-  account on Cloud Run, and `gcloud auth application-default login` locally.
+- **Production** → Secret Manager, by the name registered in
+  `SECRET_NAMES.DATABASE_URL`. Not an environment variable, because the Cloud
+  Run service configuration is readable by anyone with view access on the
+  service.
+- **Everywhere else** → `DATABASE_URL`.
+
+Pool settings worth knowing, all in that one file:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `max` | **5** | Cloud Run runs many instances against a Supabase pool that is **15 connections** on this compute tier. A large per-instance pool exhausts the server pool as soon as a few instances are warm. |
+| Connection string | **transaction pooler, port 6543** | Cloud Run scales to zero and reconnects constantly, which is what the transaction pooler is for. The direct connection is also **IPv6-only**, and Cloud Run egresses over IPv4 — it cannot reach it at all. |
+| `ssl` | `{ rejectUnauthorized: false }` | Supabase's pooler presents a certificate signed by an internal CA that is not in Node's trust store. The connection is still encrypted. `?sslmode=disable` in the string turns TLS off, for a local container that has no certificate. |
+
+**Firebase.** `src/config/firebase.ts` is the only file that knows whether
+Auth is emulated.
+
+- **`FIREBASE_AUTH_EMULATOR_HOST` set** → the Admin SDK routes to the emulator
+  on its own and accepts any project id with no credentials.
+- **Absent** → Application Default Credentials: the attached service account
+  on Cloud Run, and `gcloud auth application-default login` locally.
 
 ---
 
 ## The layer rule
 
 ```
-routes → controllers → services → repositories → Firestore
+routes → controllers → services → repositories → Postgres
 ```
 
 Enforced, not aspirational:
 
-- **Controllers never touch Firestore.** Every handler in
+- **Controllers never touch the database.** Every handler in
   `controllers/user.controller.ts` is parse → delegate → respond. Anything
   longer is logic that belongs a layer down.
 - **Services never import Express types.** `services/user.service.ts` takes
   validated input and returns response shapes. It knows nothing about
   requests, headers or status codes beyond the `ApiError`s it throws.
-- **Repositories are the only place Firestore appears.** Nothing above
-  `repositories/` imports from `firebase-admin/firestore`, so the database can
-  be swapped, batched or mocked without a layer above knowing.
+- **Repositories are the only place SQL appears.** Nothing above
+  `repositories/` imports `pg` or `config/database.js`, so the database can be
+  swapped or mocked without a layer above knowing.
 
 A quick check that the rule still holds:
 
 ```bash
 # Should return nothing.
-grep -rl "firebase-admin/firestore" src/controllers src/services src/routes
+grep -rlE "from 'pg'|config/database" src/controllers src/services
 grep -rlE "from 'express'" src/services src/repositories
 ```
 
-> `services/user.service.ts` imports `Timestamp` from `firebase-admin/firestore`
-> to stamp times. That is a value type, not a database handle — no query, read
-> or write happens outside `repositories/`.
+> `routes/health.routes.ts` imports `checkDatabaseConnectivity` from
+> `config/database.js`. That is a liveness probe, not a query — readiness has
+> to know whether the dependency answers, and it is the same exception the
+> Firestore version had.
 
-Validation sits at the edge: schemas parse in the controller, so no layer below
-has to defend against a missing or mistyped field.
+### What the migration fixed rather than moved
+
+The Firestore version leaked two database concerns upward. Both are gone
+rather than translated:
+
+- `services/user.service.ts` imported `Timestamp` from
+  `firebase-admin/firestore` to stamp times, and `utils/timestamps.ts` existed
+  only to convert it. Postgres returns `Date`, so both are deleted.
+- The service built **dotted Firestore field paths**
+  (`coachingPreferences.tone`) so that patching one preference did not replace
+  the nested map. That was Firestore's document model showing through a
+  service method. The service now hands down a plain nested patch and the
+  repository flattens it to three columns.
+
+Validation still sits at the edge: schemas parse in the controller, so no
+layer below has to defend against a missing or mistyped field.
 
 ---
 
@@ -472,11 +634,12 @@ has to defend against a missing or mistyped field.
 ```
 backend/
 ├── src/
-│   ├── index.ts                 Bootstrap, graceful shutdown
+│   ├── index.ts                 Bootstrap, DB connect, graceful shutdown
 │   ├── app.ts                   Express assembly, middleware order
 │   ├── config/
 │   │   ├── env.ts               Zod env schema, fails fast on boot
-│   │   ├── firebase.ts          Admin SDK init, emulator-aware
+│   │   ├── database.ts          The only pool. Query, transaction, drain.
+│   │   ├── firebase.ts          Admin SDK init for Auth only
 │   │   ├── logger.ts            pino, Cloud Logging severities
 │   │   ├── secrets.ts           Secret Manager accessor, cached
 │   │   └── version.ts           K_REVISION, or the package version
@@ -489,114 +652,153 @@ backend/
 │   ├── routes/                  index (versioned), health, user
 │   ├── controllers/             HTTP layer only
 │   ├── services/                Business logic
-│   ├── repositories/            The only layer touching Firestore
-│   ├── models/                  One file per collection
+│   ├── repositories/            The only layer writing SQL
+│   ├── models/                  One file per table
 │   ├── schemas/                 Zod request validation
-│   └── utils/                   api_error, async_handler, timestamps
-├── scripts/                     seed_firestore, get_test_token
-├── firebase.json                Emulator config
-├── firestore.rules              Deny-all
-├── firestore.indexes.json
+│   └── utils/                   api_error, async_handler
+├── migrations/
+│   ├── 001_initial_schema.sql
+│   └── 002_rag_embeddings.sql
+├── scripts/                     migrate, seed, get_test_token
+├── firebase.json                Auth emulator config
 └── Dockerfile
 ```
 
-Three files exist beyond the structure in the brief, each one concern:
+Files beyond the structure in the brief, each one concern:
 
+- `config/database.ts` — the pool, the query helpers, and the shutdown drain.
 - `config/logger.ts` — the pino instance, so `request_logger.ts` configures
   request logging rather than also constructing the logger.
 - `config/version.ts` — resolves the running version from `K_REVISION`.
 - `models/locale.model.ts` and `models/localized_text.model.ts` — the `{en, pt}`
   bilingual type and its resolver, imported by every model with bilingual
   content.
-- `utils/timestamps.ts` — Firestore `Timestamp` ↔ ISO 8601, in one place so no
-  layer has to remember which side of the boundary it is on.
+
+`utils/timestamps.ts` is gone: it existed only to convert Firestore
+`Timestamp`s, and Postgres returns `Date`.
 
 ---
 
-## Firestore data model
+## Data model
+
+Fourteen application tables plus `knowledge_chunks`. `snake_case` in Postgres,
+mapped to the camelCase the Flutter models use in **one place per entity** in
+the repository layer.
 
 ```
-users/{uid}
-  name, email, preferredLanguage, activity,
-  dateOfBirth, countryCode,
-  acceptedTerms, confirmedInfoTrue,
-  currentPrinciple, cycleDay, dayStreak,
-  coachingPreferences { tone, rhythm, remindersEnabled },
-  createdAt, updatedAt
+users                        id (Firebase uid), email, name, preferred_language,
+                             activity, date_of_birth, country_code,
+                             accepted_terms, confirmed_info_true,
+                             current_principle, cycle_day, day_streak,
+                             tone, rhythm, reminders_enabled,
+                             created_at, updated_at
 
-users/{uid}/onboarding/response
-  ambition, focusAreaKeys[], challenge, priorityKeys[],
-  mainGoals, motivationBalance, successVision, completedAt, updatedAt
+onboarding_responses         user_id PK → users
+                             ambition_en/pt, challenge_en/pt,
+                             main_goals_en/pt, success_vision_en/pt,
+                             focus_area_keys[], priority_keys[],
+                             motivation_balance, completed_at, updated_at
 
-users/{uid}/goals/{goalId}
-  title, why, principle, targetDate,
-  milestones[{ id, title, dueDate, reachedAt }],
-  actions[{ id, goalId, title, isDone, isToday }],
-  completedAt, createdAt, updatedAt
+goals                        id, user_id → users, title, why, principle,
+                             target_date, completed_at, created_at, updated_at
+  milestones                 id, goal_id → goals, title, due_date, reached_at, position
+  action_items               id, goal_id → goals, title, is_done, is_today, position
 
-users/{uid}/exerciseResponses/{responseId}
-  exerciseId, principle, stepResponses{}, reflection,
-  suggestedAction, completedAt
+exercises                    id, principle, title_en/pt, summary_en/pt,
+                             duration_minutes, closing_reflection_prompt_en/pt,
+                             suggested_action_en/pt, is_active, position
+  exercise_steps             id, exercise_id → exercises, position, type,
+                             prompt_en/pt, help_en/pt, options jsonb,
+                             scale_low_label_en/pt, scale_high_label_en/pt, save_as
 
-users/{uid}/sessions/{sessionId}
-  startedAt, endedAt, summary, principle, messageCount
-  └── messages/{messageId}
-        author, text, sentAt
+exercise_responses           id, user_id → users, exercise_id, principle,
+                             step_responses jsonb, reflection, suggested_action,
+                             completed_at
 
-users/{uid}/notifications/{notificationId}
-  type, title, body, isRead, receivedAt
+coaching_sessions            id, user_id → users, started_at, ended_at,
+                             summary, principle
+  chat_messages              id, session_id → coaching_sessions, author, text, sent_at
 
-users/{uid}/subscription/current
-  tier, status, trialStartedAt, trialEndsAt,
-  currentPeriodEnd, provider, providerCustomerId, updatedAt
+purpose_answers              (user_id → users, prompt_id) PK, answer, updated_at
+notifications                id, user_id → users, type, title, body, is_read, received_at
+subscriptions                user_id PK → users, tier, status, store,
+                             revenue_cat_app_user_id, entitlement_id,
+                             trial_started_at, trial_ends_at,
+                             current_period_end, updated_at
+progress_snapshots           (user_id → users, date) PK, goal_completion,
+                             actions_completed, exercises_completed
 
-users/{uid}/progressSnapshots/{YYYY-MM-DD}
-  date, goalCompletion, actionsCompleted, exercisesCompleted
-
-users/{uid}/purposeAnswers/{promptId}
-  answer, updatedAt
-
-exercises/{exerciseId}                    Shared, admin-managed
-  principle, title, summary, durationMinutes,
-  steps[{ id, type, prompt, help, options, scaleLowLabel, scaleHighLabel, saveAs? }],
-  closingReflectionPrompt, suggestedAction, isActive, order
+knowledge_chunks             chunk_id, source, content, embedding vector(1024),
+                             language, principle, content_type, source_type,
+                             proprietary, created_at
 ```
 
-Shape decisions worth knowing:
+Every arrow is `on delete cascade`.
 
-- **Bilingual content is an `{en, pt}` map**, never a resolved string. The app
-  requests by locale rather than the backend guessing which language a reader
-  wants.
-- **Milestones and actions are embedded arrays** on the goal, because the Dart
-  `Goal` carries them as lists and every screen showing one already has the
-  goal loaded.
-- **Chat messages are a subcollection**, because a long conversation would
-  outgrow Firestore's 1 MiB document limit and the coach appends one message
-  at a time.
-- **Derived state is derived, not stored.** Goal status comes from
-  `completedAt`; session `durationMinutes` from the two timestamps. The pair
-  can never disagree.
-- **Progress snapshots are keyed by calendar date**, so a day can only be
-  recorded once and a date range reads as a key range with no index.
-- `exerciseResponses` holds **one document per completed run**, not one per
-  answered step: a session is reviewed as a whole, so it should be one read.
+### Shape decisions worth knowing
 
-### Adding a subcollection
+- **Cascades everywhere.** Account deletion is one statement. This is the
+  single biggest structural gain over Firestore, which does not cascade and
+  required the delete to walk a hand-maintained list of subcollections.
+- **Milestones and action items are real tables.** They were embedded arrays
+  on the goal because Firestore made joins awkward. Postgres does not, and a
+  milestone as its own row can be updated without rewriting the goal.
+- **Bilingual *library* content is paired `_en` / `_pt` columns**, not jsonb.
+  The client wants to read and edit exercises in Supabase's table view, where
+  paired columns are legible and jsonb is not.
+- **Content a person or the coach writes is one column**, in the language it
+  was written: goal titles, chat messages, session summaries, purpose answers.
+  Under Firestore these were `{en, pt}` maps holding the *same string twice*,
+  because `asTyped` duplicated whatever the user typed — the second copy never
+  carried information. The API still returns a locale map for them, built by
+  the repository, so the Flutter models are unaffected. See the note below.
+- **`step_responses` and `options` stay jsonb.** Genuinely variable shape,
+  never queried by inner key.
+- **Derived state stays derived.** No `is_completed` on a goal — it comes from
+  `completed_at`. No `message_count` on a session — it is `count(*)`.
+- **`updated_at` is maintained by a trigger**, not by application code, so a
+  future call site cannot forget it.
+- **Check constraints mirror the TypeScript unions.** The API rejects bad
+  input via Zod; the table rejects a bad hand-edit in the Supabase dashboard.
+- Indexes on every foreign key used for lookup, plus `goals(user_id,
+  completed_at)`, `notifications(user_id, is_read)` and `chat_messages(
+  session_id, sent_at)`.
 
-`USER_SUBCOLLECTIONS` in `repositories/user.repository.ts` is what the
-cascading delete walks. **A new per-user subcollection must be added there**,
-or it will be orphaned when an account is deleted. The delete also lists what
-is actually present, so an unlisted collection is still reached — but do not
-rely on that, because the list is what documents the intent.
+### One divergence to settle in the next pass
+
+`goals.title`, `goals.why`, `chat_messages.text`, `coaching_sessions.summary`,
+`notifications.title` / `body`, `purpose_answers.answer` and
+`exercise_responses.suggested_action` are **single columns**, as specified.
+The corresponding Dart models (`Goal.title`, `ChatMessage.text`, …) are
+`Map<String, String>`.
+
+No repository reads those tables yet, so nothing is broken today. When the
+goals and coaching passes land, the repository should map one column to
+`{ en: value, pt: value }` on the way out — which is exactly what the Dart
+`asTyped` helper already does — rather than the columns being widened. The
+alternative is a paired column per field, and that only earns its place for
+content someone actually maintains in two languages, which this is not.
+
+### `date` columns and time zones
+
+`date_of_birth`, `target_date`, `due_date` and `progress_snapshots.date` are
+`date`, not `timestamptz`. node-postgres would parse those into a JS `Date` at
+**local** midnight, which serialises a birthday a day early anywhere east of
+UTC. `config/database.ts` disables that parser, and the repository converts
+explicitly in UTC. Verified on a UTC+5 machine: `1991-04-17` comes back as
+`1991-04-17T00:00:00.000Z`.
 
 ---
 
 ## Field naming: where this differs from the brief
 
 The brief said to match `lib/data/models/` field names exactly so the API and
-app agree without a translation layer, and its own Firestore block then used
+app agree without a translation layer, and its own data-model block then used
 different names for some fields the Flutter side already has. **The Flutter
 model wins** on those, since matching it was the stated reason for reading it.
+
+Columns are `snake_case`; the names in the "Used here" column below are the
+camelCase side, which is what the API speaks and what the repository maps to.
 
 | Brief | Used here | Source |
 | --- | --- | --- |
@@ -627,8 +829,16 @@ Two fields the brief lists as stored are **derived** instead:
 `isCompleted` on a goal (from `completedAt`) and `messageCount` semantics.
 `isCompleted` is returned by the API but never stored.
 
-`User.joinedAt` in Dart maps to `createdAt` in Firestore; the API returns it as
+`User.joinedAt` in Dart maps to the `created_at` column; the API returns it as
 `joinedAt`.
+
+Two column names differ from the model field for reasons that are Postgres's,
+not the brief's, and the repository maps them:
+
+| Column | Model field | Why |
+| --- | --- | --- |
+| `exercises.position`, `exercise_steps.position`, `milestones.position`, `action_items.position` | `order` | `order` is a reserved word in SQL. |
+| `subscriptions.store` | `provider` | The column is `null` until a real purchase happens; the models carry `'none'` for that state. The mapping is one line in `toSubscriptionDocument`. |
 
 ---
 
@@ -657,62 +867,72 @@ the type from there rather than restating the list.
 
 ---
 
-## Firestore rules and indexes
+## Row level security
 
-### Rules: deny-all
+**RLS is enabled on every table, with no permissive policies anywhere.** This
+is what the deny-all `firestore.rules` becomes, and it closes strictly more.
 
-`firestore.rules` denies every read and write at every depth. The app never
-touches Firestore directly — it goes through this API, which uses the Admin
-SDK and therefore bypasses rules entirely — so denying everything costs
-nothing and closes the whole surface. No client SDK, no leaked config, and no
-future screen that "just reads one collection" can reach user data without
-passing an endpoint that verifies a token first.
+The backend connects as the **service role**, which bypasses RLS, so nothing
+in the application changes. What this closes is every other route in: the
+Supabase `anon` key, the `authenticated` key, a key that leaks out of a
+future admin console, or someone wiring a dashboard straight at the database.
+Each of those reads **zero rows from every table**.
 
-It also keeps the API as the single enforcement point for the admin
-restriction, instead of that check living in two places and eventually
-disagreeing.
+Supabase grants `anon` and `authenticated` broad table privileges by default,
+so the grants alone are not protection — RLS is what makes them useless.
 
-Verified against the emulator's client REST API, which is the path a Firebase
-client SDK takes: unauthenticated reads, authenticated reads of the caller's
-**own** document, reads of nested chat messages, writes, and collection lists
-are all `403 PERMISSION_DENIED`, while the same data comes back `200` through
-`GET /v1/me`.
+`knowledge_chunks` matters most of all. It holds proprietary coaching material
+that is server-side only and must never be client-reachable, and the client
+asked specifically to verify the vector store is not publicly readable. It
+gets the same treatment as everything else: RLS on, no policies.
 
-If a client-side read is ever genuinely needed, add a narrow rule for that one
-path with an explicit `request.auth.uid == uid` condition. Do not relax the
-default.
+### Verified
+
+Both roles were recreated locally with the broad grants Supabase gives them
+(`grant select, insert, update, delete on all tables in schema public`), and
+then queried while the service role could see the same rows — so a zero is
+RLS, not an empty table:
+
+| Role | Rows visible | Writes |
+| --- | --- | --- |
+| `anon` | 0 from all 15 tables | refused on all 15 |
+| `authenticated` | 0 from all 15 tables | refused on all 15 |
+| service role | all rows | permitted |
+
+`schema_migrations` is included: it is created by `scripts/migrate.ts` rather
+than by a migration, and the script enables RLS on it for the same reason.
+
+If a direct client read is ever genuinely needed, add **one narrow policy for
+that one table**, with an explicit condition. Do not relax the default.
 
 ### Indexes
 
-Firestore indexes every single field automatically, so `firestore.indexes.json`
-carries only composite and array cases. Today's two endpoints read by document
-path and need none of them — they are declared now because an index must exist
-before the query that needs it runs, and the goals, sessions, notifications,
-exercises, progress and admin passes land next.
+Real indexes now, declared in migration 001 next to the tables they serve,
+rather than a separate `firestore.indexes.json` that had to be deployed
+independently and could not be tested locally. Postgres does not index every
+field automatically the way Firestore did, so each one is deliberate:
 
-Per-user subcollections use `COLLECTION_GROUP` scope: the collection id is the
-same under every uid, so a group index covers both the scoped query the API
-makes and the cross-user reporting the admin console needs, without a second
-index.
+| Index | Serves |
+| --- | --- |
+| `goals (user_id, completed_at)` | "this user's goals, open or done" — the filter rides along rather than being a second lookup |
+| `notifications (user_id, is_read)` | the unread badge |
+| `chat_messages (session_id, sent_at)` | a transcript is always read in order |
+| `milestones (goal_id, position)`, `action_items (goal_id, position)` | goal detail |
+| `exercise_steps (exercise_id, position)` | an exercise session |
+| `exercises (principle, position) where is_active` | the library, which never lists withdrawn exercises |
+| `exercise_responses (user_id, completed_at desc)` | history |
+| `coaching_sessions (user_id, started_at desc)` | coaching history |
+| `knowledge_chunks (principle)`, `(content_type)` | retrieval filtered before the vector search, per the system prompt spec |
+| `knowledge_chunks` ivfflat on `embedding` | cosine similarity |
 
-`fieldOverrides` switches indexing **off** for content that is never queried or
-ordered by — the free-text onboarding answers, chat message bodies, embedded
-milestone and action arrays, exercise step definitions, and exercise
-responses. That saves an index write per field on every save, and more
-importantly keeps the user's own words out of the index, which is a second
-copy of the data that account deletion would otherwise have to reach.
+`progress_snapshots` and `purpose_answers` need no extra index: their
+composite primary keys already lead with `user_id`.
 
-The file is kept to the strict schema with no comment keys, because
-`firebase deploy --only firestore:indexes` validates it and that deploy cannot
-be run here to prove extra keys are tolerated.
-
-Deploy them with:
-
-```bash
-npx firebase deploy --only firestore:rules,firestore:indexes --project succenergy-ai-coach
-```
-
-This needs billing enabled — see below.
+> **The ivfflat index will need rebuilding after ingestion.** ivfflat clusters
+> the rows that exist when it is built. Built against an empty table it is
+> meaningless, and it stays meaningless as rows arrive. After the first
+> ingestion run: `reindex index knowledge_chunks_embedding_idx`, with `lists`
+> sized to roughly rows/1000. This is noted in the migration too.
 
 ---
 
@@ -722,15 +942,28 @@ Every secret lives in **Google Secret Manager** and is referenced by name.
 Nothing is in code, nothing is committed, and no secret is ever logged.
 
 `src/config/secrets.ts` resolves secrets by name with a process-lifetime
-cache. The registry is **deliberately empty** — no external API is called yet.
-The Claude key, the embeddings key and the Stripe keys become one line each in
-`SECRET_NAMES` when those passes land, and nothing else changes:
+cache. One entry is registered:
 
 ```ts
 export const SECRET_NAMES = {
-  ANTHROPIC_API_KEY: 'anthropic-api-key',
+  DATABASE_URL: 'supabase-database-url',
 } as const satisfies Record<string, string>;
 ```
+
+> ### ⚠ Confirm the secret name before the production deploy
+>
+> `supabase-database-url` is a **placeholder**. The client is adding the
+> connection string to Secret Manager; if she names the entry anything else,
+> change that one string in `config/secrets.ts` to match.
+>
+> It must hold the **transaction pooler** string, port 6543 — not the direct
+> connection, which is IPv6-only and unreachable from Cloud Run.
+>
+> A wrong name fails the boot with a clear message rather than running
+> degraded, but it fails the *deploy*. Confirm it first.
+
+The Claude key, the embeddings key and the RevenueCat webhook secret become
+one line each when those passes land, and nothing else changes:
 
 ```ts
 const key = await getSecret('ANTHROPIC_API_KEY');
@@ -741,8 +974,14 @@ environment variable so development does not need Secret Manager access. In
 production the value comes from Secret Manager or the request fails.
 
 Cloud Run's service account needs `roles/secretmanager.secretAccessor` on each
-secret. Rotation takes effect on the next cold start; `clearSecretCache()`
-exists if it ever has to happen without a redeploy.
+secret — granted **per secret**, never project-wide. Rotation takes effect on
+the next cold start; `clearSecretCache()` exists if it ever has to happen
+without a redeploy.
+
+The database connection string is in Secret Manager rather than in
+`--set-env-vars` for the same reason as everything else here: an environment
+variable on a Cloud Run service is readable by anyone with view access on the
+service, and this one is a database credential.
 
 ---
 
@@ -750,8 +989,10 @@ exists if it ever has to happen without a redeploy.
 
 Notes on the client's checklist, and why each is where it is.
 
-**No secrets in the app, none committed.** All external calls — Claude, Stripe
-— will be proxied through this backend, never client-side.
+**No secrets in the app, none committed.** All external calls — Claude, the
+embeddings provider, RevenueCat — are proxied through this backend, never
+client-side. **The app never talks to Postgres**: it has no Supabase client,
+no anon key, and RLS would deny it if it did.
 `.gitignore` excludes `.env`, every `*serviceAccount*.json` /
 `*service-account*.json` pattern, `*.pem`, `*.p12` and
 `application_default_credentials.json`.
@@ -795,12 +1036,20 @@ redirects plain HTTP with 308 and sets HSTS when `NODE_ENV=production`, which
 covers a custom domain or future proxy forwarding plain HTTP. `trust proxy` is
 set so `X-Forwarded-Proto` is read correctly and the redirect cannot loop.
 
+**No SQL built by concatenation.** Every value reaches Postgres as a `$n`
+parameter. The one statement built dynamically — the profile patch — takes its
+column names from a fixed map in `user.repository.ts` and its values from
+placeholders, so a field name a client sends can never become SQL.
+
 **User data deletable on request, coaching memory included.** See
-[`DELETE /v1/me` cascades](#delete-v1me-cascades). Verified with 38 documents
-across 8 subcollections, including messages nested two levels down: after the
-delete, direct-path probes for all of them return nothing, `listCollections`
-reports zero, the Auth record is gone, and the shared `exercises/` library —
-which is not the user's data — is intact.
+[`DELETE /v1/me` cascades](#delete-v1me-cascades). Verified against the
+seeded persona: 49 rows across twelve tables before, `documentsDeleted: 49`
+reported, 0 rows in every one of those tables after, the Auth record gone, and
+the shared `exercises` library — which is not the user's data — intact.
+
+**The database is not publicly reachable.** See
+[Row level security](#row-level-security): RLS on every table with no
+policies, verified with both Supabase roles holding full table grants.
 
 ---
 
@@ -829,25 +1078,26 @@ Multi-stage, non-root, production dependencies only.
 docker build -t succenergy-api:local .
 ```
 
-Run it against the emulators. On Linux add `--add-host` or use
-`--network host`; on macOS and Windows `host.docker.internal` resolves to the
-host:
+Run it against a local database and the Auth emulator. On Linux add
+`--add-host` or use `--network host`; on macOS and Windows
+`host.docker.internal` resolves to the host:
 
 ```bash
 docker run --rm -p 8080:8080 \
   -e NODE_ENV=development \
   -e GCP_PROJECT_ID=succenergy-ai-coach \
   -e FIREBASE_PROJECT_ID=succenergy-ai-coach \
-  -e FIRESTORE_EMULATOR_HOST=host.docker.internal:8080 \
+  -e DATABASE_URL='postgresql://postgres:postgres@host.docker.internal:5432/succenergy?sslmode=disable' \
   -e FIREBASE_AUTH_EMULATOR_HOST=host.docker.internal:9099 \
   succenergy-api:local
 
 curl http://127.0.0.1:8080/v1/health
 ```
 
-Without the emulator variables the container needs Application Default
-Credentials, which it will not have locally — `/v1/health` still answers,
-`/v1/health/ready` will not.
+`DATABASE_URL` is not optional here: the container **will not start** without
+a reachable database, by design. If the two containers are on the same Docker
+network, use the Postgres container's name as the host instead of
+`host.docker.internal`.
 
 Image notes:
 
@@ -862,93 +1112,86 @@ Image notes:
 - Listens on `process.env.PORT`. `ENV PORT=8080` matches Cloud Run's default
   so `-p 8080:8080` works without passing it.
 - `.dockerignore` keeps `.env`, `node_modules`, `dist`, `.git`, the emulator
-  config and the scripts out of the build context.
+  config and the scripts out of the build context. **The `migrations/`
+  directory is excluded too** — migrations are applied deliberately, from a
+  machine with the connection string, not by a container starting up. A
+  service that migrates on boot migrates once per instance and races itself.
 
 ---
 
 ## Deploying to Cloud Run
 
-**Status: not deployed.** Billing is attached and Firestore exists, so nothing
-about the project blocks this any more. What blocks it is the machine this pass
-ran on:
+**The service is deployed:**
+https://succenergy-api-4612920383.us-east1.run.app — region **`us-east1`**.
 
-| Requirement | State here |
-| --- | --- |
-| `gcloud` CLI | **Not installed.** No Cloud SDK anywhere on the machine, and no Application Default Credentials to authenticate one with. |
-| Docker daemon | **Not available.** Docker Desktop is installed but its privileged helper service is not registered and no `docker-desktop` WSL distro exists, so the daemon cannot be provisioned without an interactive elevated session. |
-| Firebase CLI | Installed and signed in, but the signed-in account has **read-only access** to the project. It can read the Firestore database's metadata; it cannot write rules. |
+Earlier revisions of this file planned `us-central1`, chosen to sit inside
+Firestore's `nam5` multi-region. That reason is gone with Firestore. What
+matters now is proximity to the **Supabase project's** region, so
+co-location should be checked against wherever the client's Supabase project
+lives rather than inherited from the old plan.
 
-One thing did come out of it: the deploy **region is now confirmed** rather
-than guessed, read off the live database through the Firebase CLI. Everything
-else below still has to be run by someone with the tooling and the IAM to do
-it.
+> **This pass did not deploy anything.** The Postgres cutover was built and
+> verified locally; the running revision still serves the Firestore build until
+> someone with the tooling redeploys. This machine has no `gcloud` CLI and no
+> Docker daemon — see [What could not be done](#what-is-not-built-yet). The
+> steps below are what that redeploy needs.
 
-### What the signed-in account can and cannot do
+### Before the redeploy
 
-`npx firebase login:list` reports an account that can list the project and
-read `projects/succenergy-ai-coach/databases/(default)`. It cannot deploy:
+Four things, in order. The first two are the client's; nothing works without
+them.
 
-```
-$ npx firebase deploy --only firestore:rules,firestore:indexes --project succenergy-ai-coach
-Error: Request to https://firebaserules.googleapis.com/v1/projects/succenergy-ai-coach:test
-had HTTP Error: 403, The caller does not have permission
-```
+1. **Add the connection string to Secret Manager.** The **transaction pooler**
+   string, port 6543. Then confirm the entry's name matches
+   `SECRET_NAMES.DATABASE_URL` in `config/secrets.ts`, currently the
+   placeholder `supabase-database-url`.
+2. **Enable `pgvector`** on the Supabase project, if it is not already —
+   Database → Extensions → `vector`.
+3. **Run the migrations** against the Supabase database, from a machine that
+   has the connection string:
+   ```bash
+   DATABASE_URL='<transaction pooler string>' npm run migrate
+   ```
+   Worth running **first**, before the service, exactly as the deny-all
+   Firestore rules were: it only ever locks things down, since migration 001
+   ends by enabling RLS on every table.
+4. **Verify RLS took**, with the project's anon key, before any real data
+   exists. It should read nothing from any table.
 
-`PERMISSION_DENIED`, not `SERVICE_DISABLED` — so this is an IAM grant that
-is missing, not an API that needs enabling. Whoever runs the deploy needs, on
-`succenergy-ai-coach`:
+### IAM
+
+The deploying account needs, on `succenergy-ai-coach`:
 
 | Role | For |
 | --- | --- |
-| `roles/firebaserules.admin` | deploying `firestore.rules` |
-| `roles/datastore.indexAdmin` | deploying `firestore.indexes.json` |
 | `roles/run.admin` | `gcloud run deploy` |
-| `roles/artifactregistry.admin` | creating the image repository |
+| `roles/artifactregistry.admin` | the image repository |
 | `roles/cloudbuild.builds.editor` | `gcloud builds submit` |
-| `roles/iam.serviceAccountAdmin` + `roles/resourcemanager.projectIamAdmin` | creating `succenergy-api` and binding `roles/datastore.user` to it |
+| `roles/iam.serviceAccountAdmin` + `roles/resourcemanager.projectIamAdmin` | creating `succenergy-api` and binding to it |
 | `roles/iam.serviceAccountUser` on `succenergy-api` | letting Cloud Run run as it |
+| `roles/secretmanager.admin` (or `secretVersionAdder`) | creating the connection string secret |
 
-Project `roles/owner` covers all of these and is what the client's own account
-will already have.
+Project `roles/owner` covers all of these.
 
-### The region: `us-central1`
-
-Read off the live database rather than chosen:
-
-```bash
-npx firebase firestore:databases:get '(default)' --project succenergy-ai-coach
-# Type      FIRESTORE_NATIVE
-# Location  nam5
-```
-
-`nam5` is the **United States multi-region**, which is what the client asked
-for. Cloud Run cannot be deployed to a multi-region, so it goes to
-**`us-central1`** — one of `nam5`'s two constituent regions and the
-conventional pairing. Every request in this service reads Firestore, so
-co-location matters: a European Cloud Run against `nam5` Firestore would add a
-transatlantic round trip to all of them for no benefit.
-
-`europe-west1` appeared as a placeholder in earlier revisions of this file.
-It is gone.
+`roles/firebaserules.admin` and `roles/datastore.indexAdmin` are **no longer
+needed** — there are no Firestore rules or indexes to deploy. Neither is
+`roles/datastore.user` on the runtime service account: it reaches Postgres
+with a connection string, not with a Google identity. What it does need is
+`roles/secretmanager.secretAccessor` **on the connection string secret
+specifically**.
 
 ### The sequence
 
-`REGION` is set once at the top so there is one place to change it.
-
 ```bash
 export PROJECT=succenergy-ai-coach
-export REGION=us-central1
+export REGION=us-east1
 export IMAGE=$REGION-docker.pkg.dev/$PROJECT/succenergy/api:$(git rev-parse --short HEAD)
 
-# 0. Confirm Firestore's location has not moved, before anything is created
-gcloud firestore databases describe --database='(default)' --project $PROJECT
-
-# 1. Enable the APIs
+# 1. Enable the APIs. Firestore's is gone; Secret Manager's is now load-bearing.
 gcloud services enable \
   run.googleapis.com \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
-  firestore.googleapis.com \
   secretmanager.googleapis.com \
   --project $PROJECT
 
@@ -961,19 +1204,21 @@ gcloud artifacts repositories create succenergy \
 gcloud iam service-accounts create succenergy-api \
   --display-name "Succenergy API runtime" --project $PROJECT
 
-gcloud projects add-iam-policy-binding $PROJECT \
+# 4. Access to the connection string, per secret — never project-wide
+gcloud secrets add-iam-policy-binding supabase-database-url \
   --member serviceAccount:succenergy-api@$PROJECT.iam.gserviceaccount.com \
-  --role roles/datastore.user
+  --role roles/secretmanager.secretAccessor \
+  --project $PROJECT
 
-# Grant secretAccessor per secret as each one is added, never project-wide.
-
-# 4. Verify the image builds locally before spending a remote build on it
+# 5. Verify the image builds locally before spending a remote build on it
 docker build -t succenergy-api:local .
 
-# 5. Build and push
+# 6. Build and push
 gcloud builds submit --tag $IMAGE --project $PROJECT
 
-# 6. Deploy
+# 7. Deploy. Note what is NOT here: DATABASE_URL. The connection string comes
+#    from Secret Manager, and boot refuses to start if the variable is set
+#    with NODE_ENV=production.
 gcloud run deploy succenergy-api \
   --image $IMAGE \
   --region $REGION \
@@ -986,30 +1231,13 @@ gcloud run deploy succenergy-api \
   --project $PROJECT
 ```
 
-The Firestore `databases create` step that used to be step 2 is gone: the
-database already exists, and running it again would fail rather than be a
-harmless no-op.
-
-### Rules and indexes
-
-**Not deployed** — attempted and refused with the 403 above.
-
-```bash
-npx firebase deploy --only firestore:rules,firestore:indexes --project succenergy-ai-coach
-```
-
-Worth running **first**, before the service. It is independent of Cloud Run
-— rules and indexes are database configuration, not application deployment
-— and the rules are [deny-all](#rules-deny-all), so running them first
-locks the database down before anything is reachable rather than after.
-
-Until they are deployed the project carries whatever default rules Firestore
-was created with. That is not currently a data-exposure risk, because there is
-no client SDK pointed at this project and no data in it beyond what the
-emulator holds locally, but it should not stay that way once the app is live.
-Note that `firebase deploy` compiles `firestore.rules` even for an
-`--only firestore:indexes` run, so the two cannot be separated to get the
-indexes in without rules permission.
+> **`--max-instances 10` and the pool are related.** Each instance opens up to
+> **5** connections and Supabase's pool on this compute tier is **15**. Ten
+> instances all warm would want fifty. In practice they are rarely all warm
+> and the transaction pooler multiplexes, but **raising `--max-instances` or
+> `max` in `config/database.ts` without checking the Supabase pool size is how
+> this service starts failing under load.** If instances need to scale higher,
+> raise the Supabase compute tier first.
 
 ### Checking the service once it is up
 
@@ -1018,18 +1246,24 @@ SERVICE=$(gcloud run services describe succenergy-api --region $REGION \
   --project $PROJECT --format 'value(status.url)')
 
 curl -i $SERVICE/v1/health            # 200
-curl -i $SERVICE/v1/health/ready      # 200, proves the runtime SA reaches Firestore
+curl -i $SERVICE/v1/health/ready      # 200, proves the runtime SA reached the secret AND Postgres
 curl -i $SERVICE/v1/me                # 401, no token
 curl -sI $SERVICE/v1/health | grep -i strict-transport-security
 curl -sI http://${SERVICE#https://}/v1/health   # 308 to https
 ```
 
-`/v1/health/ready` is the one that matters most: it round-trips a Firestore
-read, so a 200 confirms `roles/datastore.user` on `succenergy-api` actually
-works. A 503 there means the binding did not take.
+`/v1/health/ready` is the one that matters most, and it now proves two things
+at once: the runtime service account could read the connection string from
+Secret Manager, and it could reach Supabase over IPv4. A 503 means one of
+those failed — the boot logs say which, by name.
+
+If the **revision never goes healthy at all**, that is the fail-fast working:
+the database was unreachable and the service refused to start rather than
+serving 500s. The previous revision keeps serving. Check the revision logs for
+`Cannot reach the database`.
 
 Then confirm in Cloud Logging that request log lines carry no email addresses,
-names, tokens or user content:
+names, tokens, connection strings or user content:
 
 ```bash
 gcloud logging read \
@@ -1040,25 +1274,26 @@ gcloud logging read \
 **Authenticated verification waits for the Flutter side.** A real ID token has
 to come from the app's own sign-in against the production Auth instance. Do
 **not** create a test user in production Auth to get one — `401` on a
-tokenless request is sufficient proof the middleware is active, and a real
-account in the client's live user list is not worth a curl.
+tokenless request is sufficient proof the middleware is active.
 
 ### Notes for whoever runs this
 
-- **Do not set `FIRESTORE_EMULATOR_HOST` or `FIREBASE_AUTH_EMULATOR_HOST` on
-  the service.** Boot refuses to start if either is set with
-  `NODE_ENV=production`, which is deliberate — a production instance quietly
-  talking to an emulator is worse than one that will not start.
-- `--allow-unauthenticated` is correct here: the service is public at the
-  network level and enforces Firebase ID tokens itself. Cloud Run IAM would
-  reject mobile clients, which have no Google identity.
+- **Do not set `DATABASE_URL` on the service.** Boot refuses to start if it is
+  set with `NODE_ENV=production`, which is deliberate: an environment variable
+  on a Cloud Run service is readable by anyone with view access, and this one
+  is a database credential.
+- **Do not set `FIREBASE_AUTH_EMULATOR_HOST`** either, for the same
+  refuses-to-start reason.
+- **Use the transaction pooler string, port 6543.** The direct connection is
+  IPv6-only; Cloud Run egresses over IPv4 and simply cannot reach it. This is
+  the single most likely cause of a failed first deploy.
 - **Not** the default compute service account. It carries `roles/editor`
-  across the project; `succenergy-api` carries `roles/datastore.user` and
-  nothing else.
-- Secrets go in as `--set-secrets`, not `--set-env-vars`, once `SECRET_NAMES`
-  has entries. `--set-env-vars` puts the value in the service's own
-  configuration, readable by anyone with Cloud Run view access.
-- `--min-instances 0` scales to zero and accepts cold starts. Raise to 1 if
+  across the project.
+- `--allow-unauthenticated` is correct: the service is public at the network
+  level and enforces Firebase ID tokens itself. Cloud Run IAM would reject
+  mobile clients, which have no Google identity.
+- `--min-instances 0` scales to zero and accepts cold starts. A cold start now
+  includes a Secret Manager read and a Postgres connect; raise to 1 if
   first-request latency matters more than idle cost.
 
 ---
@@ -1067,11 +1302,42 @@ account in the client's live user list is not worth a curl.
 
 Out of scope for this pass, listed so nobody looks for them:
 
-Claude integration, RAG, Supabase/pgvector, embeddings, the RevenueCat SDK
-and its webhook, push notifications, and the goals, exercises, progress and
-admin endpoints.
+**On top of this schema, next:** the goals, exercises, progress, purpose,
+notifications and admin endpoints. The tables are there and the cascades are
+correct; what is missing is the repositories, services and routes above them.
+
+**RAG.** `knowledge_chunks` exists and is empty. No ingestion, no embedding
+calls, no retrieval. The client's knowledge base has not arrived. When it
+does, ingestion is a script run against an existing table rather than a schema
+change — and the ivfflat index needs rebuilding once rows are in it.
+
+**Claude integration.** Nothing calls the API yet.
+
+**RevenueCat.** The `subscriptions` table is written once, at account
+creation, with the default trial state. The SDK, the webhook and the
+entitlement gating are a later pass and cannot be built until the app is in
+both stores.
+
+**Push notifications.** The `notifications` table exists; FCM does not.
+
 Email sending. The Flutter app still runs entirely on its mock repositories —
 swapping them for this API starts next.
 
 Auth flows — register, log in, password reset — are client-side by design and
 are not coming here. This backend verifies tokens; it does not issue them.
+
+### Not done in this pass, and why
+
+- **The redeploy.** The Postgres cutover is built, migrated and verified
+  locally, but nothing was deployed: this machine has no `gcloud` CLI and no
+  working Docker daemon. **The live service is still running the Firestore
+  build.** See [Deploying to Cloud Run](#deploying-to-cloud-run) for the exact
+  sequence and the two prerequisites that are the client's.
+- **Migration 002 has never been applied end to end.** The local Postgres
+  available here has no pgvector, so `create extension vector` stops it —
+  correctly, and the transaction rolls back cleanly. Everything in the file
+  *except* the extension and the ivfflat index was verified by substitution
+  in a throwaway database. It should apply cleanly on Supabase, where the
+  extension exists, but that is an expectation and not a verified fact.
+- **The Docker image build is still unverified**, third pass in a row, same
+  cause: no daemon on this machine.
