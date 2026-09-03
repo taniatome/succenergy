@@ -11,6 +11,9 @@ class AppDurations {
   /// Standard state change.
   static const Duration fast = Duration(milliseconds: 200);
 
+  /// The checkmark laying itself down on a consent box.
+  static const Duration tickDraw = Duration(milliseconds: 150);
+
   /// Default entrance and transition.
   static const Duration medium = Duration(milliseconds: 320);
 

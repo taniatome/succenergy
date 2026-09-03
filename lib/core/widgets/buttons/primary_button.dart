@@ -15,6 +15,10 @@ import '../../theme/app_typography.dart';
 /// [emphasis] holds one word of the label at a heavier weight, which is how
 /// the Welcome call to action keeps its stressed word now that the button
 /// itself is gold.
+///
+/// While [isBusy] the whole button breathes rather than only showing a
+/// spinner: a form waiting on the network should look like it is working, and
+/// a static button with a ring in it looks like it is stuck.
 class PrimaryButton extends StatefulWidget {
   const PrimaryButton({
     required this.label,
@@ -45,14 +49,55 @@ class PrimaryButton extends StatefulWidget {
   State<PrimaryButton> createState() => _PrimaryButtonState();
 }
 
-class _PrimaryButtonState extends State<PrimaryButton> {
+class _PrimaryButtonState extends State<PrimaryButton>
+    with SingleTickerProviderStateMixin {
   bool _pressed = false;
+
+  /// The busy breath. Runs only while an action is in flight.
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: AppDurations.pulse ~/ 2,
+  );
 
   bool get _enabled => widget.onPressed != null && !widget.isBusy;
 
   @override
+  void didUpdateWidget(PrimaryButton old) {
+    super.didUpdateWidget(old);
+    if (widget.isBusy == old.isBusy) {
+      return;
+    }
+    if (widget.isBusy) {
+      _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.isBusy && !reduced) {
+      return AnimatedBuilder(
+        animation: _pulse,
+        builder: (BuildContext context, Widget? child) {
+          final double t = AppCurves.ambient.transform(_pulse.value);
+          return Transform.scale(scale: 1 - 0.02 * t, child: child);
+        },
+        child: _body(reduced: reduced),
+      );
+    }
+    return _body(reduced: reduced);
+  }
+
+  Widget _body({required bool reduced}) {
     final double scale = _pressed && !reduced ? 0.97 : 1;
 
     return GestureDetector(

@@ -61,6 +61,10 @@ class AppIconPainter extends CustomPainter {
         _kebab(canvas, fill);
       case AppIconMark.chevronDown:
         _chevronDown(canvas, stroke);
+      case AppIconMark.eye:
+        _eye(canvas, stroke, fill, struck: false);
+      case AppIconMark.eyeClosed:
+        _eye(canvas, stroke, fill, struck: true);
     }
 
     canvas.restore();
@@ -183,6 +187,24 @@ class AppIconPainter extends CustomPainter {
       ]),
       stroke,
     );
+  }
+
+  /// Two mirrored arcs closing on a pupil, with an optional stroke through
+  /// it for the hidden state. Drawn here rather than borrowed from Material,
+  /// so the reveal toggle sits on the same grid as the rest of the set.
+  void _eye(Canvas canvas, Paint stroke, Paint fill, {required bool struck}) {
+    final Path lid =
+        Path()
+          ..moveTo(3.2, 12)
+          ..quadraticBezierTo(7.6, 6.2, 20.8, 12)
+          ..quadraticBezierTo(16.4, 17.8, 3.2, 12)
+          ..close();
+    canvas.drawPath(lid, stroke);
+    canvas.drawCircle(const Offset(12, 12), 2.5, fill);
+
+    if (struck) {
+      canvas.drawLine(const Offset(5, 19), const Offset(19, 5), stroke);
+    }
   }
 
   Path _path(List<Offset> points) {

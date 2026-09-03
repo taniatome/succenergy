@@ -40,6 +40,12 @@ enum AppIconMark {
 
   /// A chevron pointing down, for a row that expands in place.
   chevronDown,
+
+  /// Reveal a password. An eye, open.
+  eye,
+
+  /// Hide a password. The same eye with a stroke through it.
+  eyeClosed,
 }
 
 /// Draws one of the app's own icon marks.
