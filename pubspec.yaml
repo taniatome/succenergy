@@ -22,6 +22,15 @@ dependencies:
   url_launcher: ^6.3.2
   permission_handler: ^11.3.1
 
+  # Identity. Firebase Auth issues and refreshes the ID token; the backend
+  # only ever verifies it. Credentials for biometric sign-in are the one
+  # secret the app holds, and they live in the platform keystore.
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.0
+  flutter_secure_storage: ^9.2.2
+  local_auth: ^2.3.0
+  http: ^1.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -3,6 +3,8 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Must come after the Android and Flutter plugins.
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -24,7 +26,10 @@ android {
         applicationId = "com.succenergy.succenergy_ai_coach"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // 23 rather than Flutter's default: BiometricPrompt, which local_auth
+        // shows, and the EncryptedSharedPreferences backing
+        // flutter_secure_storage both start there.
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

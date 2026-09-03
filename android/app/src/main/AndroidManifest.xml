@@ -4,8 +4,14 @@
          on Android 13 and above. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- Biometric sign-in. Declared rather than requested at runtime:
+         BiometricPrompt is shown by the system and needs no consent dialog of
+         its own, and the app falls back to the password form wherever the
+         hardware or the enrolment is absent. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+
     <application
-        android:label="succenergy_ai_coach"
+        android:label="Succenergy"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

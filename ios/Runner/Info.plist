@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Shown by the system the first time Face ID is used to sign in. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Sign in to your Succenergy AI Coach account faster</string>
 	<!-- Required so the Settings links can open a browser. -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
@@ -11,7 +14,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Succenergy Ai Coach</string>
+	<string>Succenergy</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
