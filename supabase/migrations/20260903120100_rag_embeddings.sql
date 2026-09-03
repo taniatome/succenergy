@@ -1,4 +1,4 @@
--- 002_rag_embeddings.sql
+-- 20260903120100_rag_embeddings.sql
 --
 -- The RAG vector store. Created empty.
 --
@@ -9,14 +9,42 @@
 --
 -- Nothing in this pass writes, embeds, reads or retrieves from this table.
 
--- pgvector is already enabled on the client's Supabase project. Declared here
--- anyway so this migration is self-contained and applies to an empty database
--- — a fresh local one included.
+-- pgvector, and where its `vector` type lives.
 --
--- On a plain Postgres without the pgvector extension installed this line is
--- where the migration stops. That is the correct failure: the table cannot be
--- created without the `vector` type. Local development should use a Supabase
--- project or the `pgvector/pgvector` Docker image, both of which ship it.
+-- This is the one thing that differs between the two databases this migration
+-- has to run against, and it is worth being explicit about.
+--
+--   * On **Supabase**, pgvector is pre-installed into the `extensions` schema,
+--     not `public`. An unqualified `vector(1024)` below would not resolve
+--     unless `extensions` is on the search path — and what the search path is
+--     when the GitHub integration applies this is not something to rely on.
+--   * On a **plain Postgres** — the `pgvector/pgvector` Docker image used for
+--     local development — `create extension` puts it in the first schema on
+--     the search path, which is `public`.
+--
+-- So the search path names both, and the type below stays unqualified. That
+-- resolves in either database.
+--
+-- Hard-qualifying as `extensions.vector(1024)` would have been more explicit
+-- but would break the local Docker path, where the type is genuinely in
+-- `public`. A non-existent schema on the search path is ignored rather than an
+-- error, so naming both is safe in both directions.
+--
+-- `set` rather than `set local`: `set local` is silently ignored with a
+-- warning outside a transaction block, and whether the tool applying this
+-- wraps it in one is exactly the assumption being avoided here. The statement
+-- is the last in the file's session either way.
+set search_path = public, extensions;
+
+-- Already enabled on the client's Supabase project, where this is a no-op —
+-- `if not exists` matches the extension by name whatever schema it is in.
+-- Declared anyway so the migration is self-contained against an empty
+-- database.
+--
+-- On a Postgres without pgvector available at all, this line is where the
+-- migration stops. That is the correct failure: the table cannot be created
+-- without the `vector` type. Local development should use a Supabase project
+-- or the `pgvector/pgvector` image, both of which ship it.
 create extension if not exists vector;
 
 -- ---------------------------------------------------------------------------

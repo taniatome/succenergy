@@ -970,6 +970,12 @@ Stated plainly.
 
 # Postgres Migration Pass
 
+> **Partly superseded.** Migrations moved to `supabase/migrations/` with
+> timestamped filenames, and the tracking table changed, once the client
+> confirmed the Supabase GitHub integration applies them. Paths and tracking
+> details below are the record of what was true at the time. See
+> [Migrations Follow-Up](#migrations-follow-up).
+
 Firestore is out. Supabase Postgres is now the single database for both
 application data and the RAG vector store. Firebase Auth stays, for token
 verification and later FCM.
@@ -1409,3 +1415,169 @@ Stated plainly.
    client's real anon key at the client's real project. **Re-run that check
    once the migrations are applied on Supabase**, before any real data is in
    there. It is the client's explicit request, and it is one query.
+
+---
+
+# Migrations Follow-Up
+
+The client confirmed migrations run through **Supabase's GitHub integration**.
+That changes where the files live and, more importantly, who owns applying
+them.
+
+`npm run build`, `npm run lint` and `npm run typecheck` are all clean.
+
+## The move
+
+| Was | Now |
+| --- | --- |
+| `backend/migrations/001_initial_schema.sql` | `supabase/migrations/20260903120000_initial_schema.sql` |
+| `backend/migrations/002_rag_embeddings.sql` | `supabase/migrations/20260903120100_rag_embeddings.sql` |
+
+Both moved with `git mv`, so the history follows. The SQL is unchanged except
+for the two things below; the initial schema's only edit is its first line, a
+comment that echoed the old filename. Verified: everything below that line is
+byte-identical to what was committed.
+
+The path and the naming are both load-bearing. The integration reads
+`supabase/migrations/` and nowhere else, and takes each migration's *version*
+from the leading digits of the filename. `backend/migrations/001_*.sql` was
+invisible to it on both counts — it would never have been applied, and nothing
+would have said so.
+
+`loadMigrations` now rejects a file that is not `<digits>_<name>.sql` rather
+than quietly including it, for the same reason: the integration would skip it
+silently, so the local runner should not be the more permissive of the two.
+
+## 1. Two trackers that could not see each other
+
+The real hazard, and the one worth spelling out.
+
+The integration records applied migrations in
+`supabase_migrations.schema_migrations`, keyed by version. `migrate.ts` had
+its own `public.schema_migrations`. Neither could see the other, so a
+migration applied by one would be **re-applied by the other** — `create table`
+run twice, and for anything not written idempotently, a failed deploy or a
+half-built schema.
+
+Documenting that as a caveat would not have fixed it. So there is now **one
+tracker**, and it is Supabase's:
+
+- `migrate.ts` reads applied versions from
+  `supabase_migrations.schema_migrations` and writes to it in the same format
+  the CLI does — `version` from the timestamp prefix, `name` from the rest.
+- `statements` is left null. It is the CLI's own record of how it split the
+  file and nothing reads it back.
+- It does **not** `alter` that table. On a real project the table is
+  Supabase's and already exists; the script reads
+  `information_schema.columns` and adapts to the columns that are there. It
+  creates the table in the CLI's full shape only when bootstrapping an empty
+  database, so a database started locally is one the integration can later
+  write to.
+- Checksums moved to a sibling table, `supabase_migrations.local_checksums`,
+  and are now **advisory**: a migration the integration applied has no
+  checksum row and is not second-guessed. Only what the local runner applied
+  is guarded against being edited.
+
+Neither table gets RLS, and that is deliberate rather than an omission: the
+`supabase_migrations` schema is not one of the schemas PostgREST exposes, so
+an anon or authenticated key cannot reach it through the API at all. The
+previous pass enabled RLS on `public.schema_migrations` because it *was* in an
+exposed schema. That table is no longer created.
+
+**Ownership is now stated in three places** — the module docstring, the README
+under [Migrations](backend/README.md), and the deploy prerequisites, which
+previously told the reader to run `npm run migrate` against Supabase by hand
+and now says to push and let the integration apply it.
+
+And it is enforced, not just documented: `migrate.ts` refuses under
+`NODE_ENV=production` and prints the host it is about to migrate before
+writing anything. That guard sits **above** the import of
+`config/database.js`, because that module pulls in `config/env.js`, which
+validates at import time and calls `process.exit` — a static import had the
+script refused for the wrong reason, with a message about environment
+variables rather than about which tool owns production migrations. It uses a
+dynamic import for the same reason `scripts/seed.ts` does.
+
+## 2. `vector` is in a different schema on Supabase
+
+Correct, and it would have broken. Supabase pre-installs pgvector into
+`extensions`, not `public`, so the unqualified `vector(1024)` in the table
+definition would not have resolved.
+
+The fix is a search path rather than a hard qualification:
+
+```sql
+set search_path = public, extensions;
+create extension if not exists vector;
+```
+
+`extensions.vector(1024)` was the other option and it is more explicit, but it
+would have **broken the local Docker path**, where `create extension` puts the
+type in `public` and there is no `extensions` schema at all. Naming both
+schemas resolves in either database, and a schema that does not exist is
+ignored on the search path rather than being an error.
+
+`set` rather than `set local`: `set local` is silently ignored with a warning
+outside a transaction block, and whether the integration wraps each file in
+one is exactly the assumption being avoided.
+
+### This was tested, and the fix is load-bearing
+
+No pgvector build exists for the Postgres on this machine, so the extension
+itself still cannot be installed. But the *schema-resolution* problem — the
+thing the change is for — was tested directly, by creating a `vector` type
+with typmod support in an `extensions` schema, laid out as Supabase lays it
+out, and running the real migration file with only the two statements that
+need pgvector's C code substituted:
+
+| Database | `vector` type in | File | Result |
+| --- | --- | --- | --- |
+| `sp_with_fix` | `extensions` | as committed | **applied** — `embedding` is `vector(1024)` |
+| `sp_without_fix` | `extensions` | `set search_path` line removed | **failed** — `type "vector" does not exist` |
+| `sp_public` | `public` | as committed | **applied** — `embedding` is `vector(1024)` |
+
+So the fix does something, it is the thing that makes it work, and it does not
+break the local case. The typmod survives, which was the other thing worth
+checking — `vector(1024)` parses as a parameterised type, not just a name.
+
+## Verification
+
+Everything from the previous pass re-run after the move.
+
+| Check | Result |
+| --- | --- |
+| `npm run build` / `lint` / `typecheck` | clean |
+| Migrate on an empty database | initial schema applied in 324ms; RAG migration failed at `create extension vector` and rolled back |
+| Migrate again | initial schema skipped; nothing re-applied |
+| Tracking table | `supabase_migrations.schema_migrations` holds `20260903120000 / initial_schema`; `public.schema_migrations` is **not created** |
+| Checksums | `supabase_migrations.local_checksums`, 64-char SHA-256, one row |
+| **Integration's rows are respected** | Inserted `20260903120100` directly, as the integration would. `npm run migrate` then reports "Database is up to date. 2 migration(s) already applied." and does **not** attempt it. |
+| Edit guard, migration the runner applied | refuses, names the file |
+| Edit guard, migration the "integration" applied | **does not** complain — advisory only, as intended |
+| `NODE_ENV=production` | refuses, with the message about the integration owning production |
+| `npm run seed` | 49 rows across twelve tables, plus the shared library |
+| Endpoint suite | **40 assertions, 40 passed** |
+| Delete cascade | 49 rows before, `documentsDeleted: 49`, 0 after, shared library intact |
+| RLS | `anon` and `authenticated` see 0 rows and cannot write, all 15 tables; service role sees the data |
+
+## What could not be done
+
+1. **The RAG migration still has not run against a real Supabase instance.**
+   The schema-resolution risk is now tested and closed, but
+   `create extension vector` and the ivfflat index have never executed for
+   real, anywhere — there is no pgvector build available here. They should be
+   the first thing checked when the integration applies this.
+
+2. **There is no `supabase/config.toml`.** Only the migrations were moved,
+   which is what was asked. The GitHub integration is normally configured
+   against a repository that has been through `supabase init`, and depending
+   on how the client set the integration up it may expect that file and the
+   project ref in it. **Worth confirming the first push actually applies both
+   migrations** rather than assuming silence means success — the
+   `select version, name from supabase_migrations.schema_migrations` in the
+   README's deploy prerequisites is there for exactly that. I did not
+   fabricate a config file with a guessed project ref.
+
+3. **Still not deployed**, and the live service still runs the Firestore
+   build. Unchanged from the previous pass; same missing `gcloud` and Docker
+   daemon.

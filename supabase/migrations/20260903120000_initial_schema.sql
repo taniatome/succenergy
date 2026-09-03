@@ -1,4 +1,4 @@
--- 001_initial_schema.sql
+-- 20260903120000_initial_schema.sql
 --
 -- Application schema for the Succenergy AI Coach API.
 --

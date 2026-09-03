@@ -13,7 +13,7 @@ import { getSecret, SECRET_NAMES } from './secrets.js';
  * connection string.
  *
  * Supabase Postgres is the single database: application data and, from
- * migration 002, the RAG vector store.
+ * the RAG migration, the vector store the coach retrieves from.
  */
 
 const { Pool: PgPool, types } = pg;
