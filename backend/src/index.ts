@@ -1,4 +1,5 @@
 import { createApp } from './app.js';
+import { closeDatabase, initDatabase } from './config/database.js';
 import { env, isEmulated } from './config/env.js';
 import { logger } from './config/logger.js';
 import { SERVICE_VERSION } from './config/version.js';
@@ -9,7 +10,15 @@ import { SERVICE_VERSION } from './config/version.js';
  * Importing config/env.js is what validates the environment, and it exits the
  * process on failure, so nothing below runs against a half-configured
  * service.
+ *
+ * The database connects before the server listens. A service that starts
+ * without its database serves 500s until someone notices; failing here means
+ * the revision never goes healthy and Cloud Run keeps the previous one
+ * serving. `initDatabase` exits the process itself, with the same
+ * names-not-values message style as `config/env.ts`.
  */
+
+await initDatabase();
 
 const app = createApp();
 
@@ -26,7 +35,7 @@ const server = app.listen(env.PORT, () => {
 
   if (isEmulated) {
     logger.info(
-      'Running against the Firebase emulators. Start them with: npm run emulators',
+      'Running against the Firebase Auth emulator. Start it with: npm run emulators',
     );
   }
 });
@@ -56,14 +65,23 @@ function shutdown(signal: string): void {
   // Does not hold the event loop open once everything else has finished.
   forceExit.unref();
 
+  // The HTTP server first, so no new request can arrive and try to check out
+  // a client from a pool that is being drained; then the pool, so the
+  // connections go back to Supabase's pooler rather than timing out there.
   server.close((err) => {
-    clearTimeout(forceExit);
     if (err) {
       logger.error({ err }, 'Error while closing server');
-      process.exit(1);
     }
-    logger.info('Shutdown complete');
-    process.exit(0);
+
+    void closeDatabase()
+      .catch((poolError: unknown) => {
+        logger.error({ err: poolError }, 'Error while draining the database pool');
+      })
+      .finally(() => {
+        clearTimeout(forceExit);
+        logger.info('Shutdown complete');
+        process.exit(err ? 1 : 0);
+      });
   });
 }
 

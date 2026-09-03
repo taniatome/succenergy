@@ -1,20 +1,21 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
 import type { App } from 'firebase-admin/app';
 import type { Auth } from 'firebase-admin/auth';
-import type { Firestore } from 'firebase-admin/firestore';
 
 import { env, isEmulated } from './env.js';
 
 /**
- * The one place in the codebase that knows whether we are emulated.
+ * Firebase Admin, for authentication only.
  *
- * When FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST are set the
- * Admin SDK routes to the emulators on its own and accepts any project id
- * with no credentials, so initialising with the project id alone is enough.
+ * Firebase's role in this service is now token verification and, later, FCM.
+ * Application data lives in Postgres — see `config/database.ts`.
  *
- * When they are absent we use Application Default Credentials: the attached
+ * When FIREBASE_AUTH_EMULATOR_HOST is set the Admin SDK routes to the
+ * emulator on its own and accepts any project id with no credentials, so
+ * initialising with the project id alone is enough.
+ *
+ * When it is absent we use Application Default Credentials: the attached
  * service account on Cloud Run, and `gcloud auth application-default login`
  * locally. Nothing below this file branches on environment.
  */
@@ -36,19 +37,6 @@ function createApp(): App {
 
 const app = createApp();
 
-export const firestore: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
 
-// Undefined properties are dropped rather than throwing, so a PATCH that
-// omits a field does not have to be pruned by hand at every call site.
-firestore.settings({ ignoreUndefinedProperties: true });
-
 export { app as firebaseApp };
-
-/**
- * Round-trips a single read so /v1/health/ready can report Firestore
- * connectivity rather than guessing from process state.
- */
-export async function checkFirestoreConnectivity(): Promise<void> {
-  await firestore.collection('_health').doc('probe').get();
-}

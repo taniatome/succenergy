@@ -1,7 +1,7 @@
 {
   "name": "succenergy-ai-coach-backend",
   "version": "0.1.0",
-  "description": "Succenergy AI Coach API. Express + Firestore on Cloud Run.",
+  "description": "Succenergy AI Coach API. Express + Postgres (Supabase) on Cloud Run.",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,9 +11,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "dev:emulated": "cross-env FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 tsx watch src/index.ts",
-    "emulators": "firebase emulators:start --only auth,firestore",
-    "seed": "cross-env FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 tsx scripts/seed_firestore.ts",
+    "dev:emulated": "cross-env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 tsx watch src/index.ts",
+    "emulators": "firebase emulators:start --only auth",
+    "migrate": "tsx scripts/migrate.ts",
+    "seed": "cross-env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 tsx scripts/seed.ts",
     "token": "cross-env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 tsx scripts/get_test_token.ts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
@@ -26,6 +27,7 @@
     "express": "^4.21.2",
     "firebase-admin": "^13.0.2",
     "helmet": "^8.0.0",
+    "pg": "^8.23.0",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
     "zod": "^3.24.1"
@@ -35,6 +37,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.7",
+    "@types/pg": "^8.23.1",
     "cross-env": "^7.0.3",
     "eslint": "^9.18.0",
     "firebase-tools": "^13.29.1",

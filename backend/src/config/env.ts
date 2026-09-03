@@ -57,32 +57,51 @@ const envSchema = z
         .default('info'),
     ),
 
-    FIRESTORE_EMULATOR_HOST: optionalString,
+    /**
+     * Postgres connection string, local development only.
+     *
+     * In production the string comes from Secret Manager instead — see
+     * `config/database.ts` — so that it is not readable from the Cloud Run
+     * service's own configuration.
+     */
+    DATABASE_URL: optionalString,
+
     FIREBASE_AUTH_EMULATOR_HOST: optionalString,
 
     TEST_USER_EMAIL: optionalString,
     TEST_USER_PASSWORD: optionalString,
   })
   .superRefine((value, ctx) => {
-    const firestore = Boolean(value.FIRESTORE_EMULATOR_HOST);
-    const auth = Boolean(value.FIREBASE_AUTH_EMULATOR_HOST);
+    const production = value.NODE_ENV === 'production';
 
-    // Half-emulated is the worst outcome available: one half of the app would
-    // read local data while the other half authenticated against production.
-    if (firestore !== auth) {
+    // Outside production the connection string comes from the environment.
+    // In production it comes from Secret Manager, and setting it here would
+    // put a database credential into the Cloud Run service configuration,
+    // readable by anyone with view access.
+    if (!production && !value.DATABASE_URL) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: [firestore ? 'FIREBASE_AUTH_EMULATOR_HOST' : 'FIRESTORE_EMULATOR_HOST'],
-        message:
-          'FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST must be set together or not at all',
+        path: ['DATABASE_URL'],
+        message: 'DATABASE_URL is required outside production',
       });
     }
 
-    if (value.NODE_ENV === 'production' && (firestore || auth)) {
+    if (production && value.DATABASE_URL) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['NODE_ENV'],
-        message: 'emulator hosts must not be set when NODE_ENV is production',
+        path: ['DATABASE_URL'],
+        message:
+          'DATABASE_URL must not be set when NODE_ENV is production; the connection string comes from Secret Manager',
+      });
+    }
+
+    // A production instance quietly authenticating against an emulator is
+    // worse than one that will not start.
+    if (production && value.FIREBASE_AUTH_EMULATOR_HOST) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['FIREBASE_AUTH_EMULATOR_HOST'],
+        message: 'must not be set when NODE_ENV is production',
       });
     }
   });
@@ -115,9 +134,13 @@ if (!parsed.success) {
 
 export const env: Env = parsed.data;
 
-/** True when both emulator hosts are set, i.e. local development. */
-export const isEmulated = Boolean(
-  env.FIRESTORE_EMULATOR_HOST && env.FIREBASE_AUTH_EMULATOR_HOST,
-);
+/**
+ * True when the Auth emulator is in use, i.e. local development.
+ *
+ * Firebase Auth is the only Firebase service left — Firestore is gone, and
+ * Postgres has no emulator, it is simply a different `DATABASE_URL`. So this
+ * is now a single flag rather than a pair that had to agree.
+ */
+export const isEmulated = Boolean(env.FIREBASE_AUTH_EMULATOR_HOST);
 
 export const isProduction = env.NODE_ENV === 'production';

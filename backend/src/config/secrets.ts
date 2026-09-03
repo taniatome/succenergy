@@ -5,10 +5,10 @@ import { env, isEmulated } from './env.js';
 /**
  * Secret Manager accessor.
  *
- * Secrets are referenced by name and resolved at runtime. Nothing is
- * registered yet — the Claude key, the embeddings key and the RevenueCat
- * webhook secret arrive in later passes, and each is a one-line addition to
- * SECRET_NAMES rather than a code change anywhere else.
+ * Secrets are referenced by name and resolved at runtime. The Claude key,
+ * the embeddings key and the RevenueCat webhook secret arrive in later
+ * passes, and each is a one-line addition to SECRET_NAMES rather than a code
+ * change anywhere else.
  *
  * Values are cached for the lifetime of the process. Cloud Run instances are
  * short-lived enough that rotation takes effect on the next cold start; if a
@@ -18,14 +18,29 @@ import { env, isEmulated } from './env.js';
 /**
  * Registry of secrets this service may read, keyed by the identifier used in
  * code. The value is the Secret Manager secret name, not the secret itself.
- *
- * Deliberately empty: no external API is called yet.
  */
 export const SECRET_NAMES = {
+  /**
+   * The Supabase Postgres connection string, read by `config/database.ts` in
+   * production.
+   *
+   * PLACEHOLDER NAME — MUST BE CONFIRMED BEFORE THE PRODUCTION DEPLOY.
+   * The client is adding the entry to Secret Manager; if she names it
+   * anything other than `supabase-database-url`, change the string here to
+   * match. A wrong name fails the boot with a clear message rather than
+   * running degraded, but it fails the deploy, so confirm it first.
+   *
+   * Use the **transaction pooler** string, port 6543. The direct connection
+   * is IPv6-only and Cloud Run egresses over IPv4.
+   *
+   * The runtime service account needs `roles/secretmanager.secretAccessor`
+   * on this secret specifically, never project-wide.
+   */
+  DATABASE_URL: 'supabase-database-url',
+
   // ANTHROPIC_API_KEY: 'anthropic-api-key',
   // EMBEDDINGS_API_KEY: 'embeddings-api-key',
   // REVENUECAT_WEBHOOK_SECRET: 'revenuecat-webhook-secret',
-  // SUPABASE_CONNECTION_STRING: 'supabase-connection-string',
 } as const satisfies Record<string, string>;
 
 export type SecretKey = keyof typeof SECRET_NAMES;
@@ -57,9 +72,7 @@ export async function getSecret(key: SecretKey, version = 'latest'): Promise<str
   }
 
   if (isEmulated) {
-    // String() rather than interpolating `key` directly: with an empty
-    // registry SecretKey is `never`, which is not a valid template operand.
-    const local = process.env[`SECRET_${String(key)}`];
+    const local = process.env[`SECRET_${key}`];
     if (local !== undefined && local.trim() !== '') {
       cache.set(cacheKey, local);
       return local;
