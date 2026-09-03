@@ -1130,11 +1130,15 @@ matters now is proximity to the **Supabase project's** region, so
 co-location should be checked against wherever the client's Supabase project
 lives rather than inherited from the old plan.
 
-> **This pass did not deploy anything.** The Postgres cutover was built and
-> verified locally; the running revision still serves the Firestore build until
-> someone with the tooling redeploys. This machine has no `gcloud` CLI and no
-> Docker daemon — see [What could not be done](#what-is-not-built-yet). The
-> steps below are what that redeploy needs.
+> **This pass did not deploy anything, and the live service still runs the
+> Firestore build.** Checked, not assumed — revision
+> `succenergy-api-00002-ltn` answers `/v1/health/ready` with
+> `checks.firestore`, so it predates this pass. Redeploying is what switches
+> the live service to Postgres; until then the API in production is reading
+> Firestore and this repository is not.
+>
+> Nothing was deployed here because this machine has no `gcloud` CLI and no
+> Docker daemon. The steps below are what that redeploy needs.
 
 ### Before the redeploy
 
@@ -1331,8 +1335,9 @@ are not coming here. This backend verifies tokens; it does not issue them.
 - **The redeploy.** The Postgres cutover is built, migrated and verified
   locally, but nothing was deployed: this machine has no `gcloud` CLI and no
   working Docker daemon. **The live service is still running the Firestore
-  build.** See [Deploying to Cloud Run](#deploying-to-cloud-run) for the exact
-  sequence and the two prerequisites that are the client's.
+  build** — revision `succenergy-api-00002-ltn` reports `checks.firestore` on
+  `/v1/health/ready`. See [Deploying to Cloud Run](#deploying-to-cloud-run)
+  for the sequence and the two prerequisites that are the client's.
 - **Migration 002 has never been applied end to end.** The local Postgres
   available here has no pgvector, so `create extension vector` stops it —
   correctly, and the transaction rolls back cleanly. Everything in the file

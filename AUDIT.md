@@ -850,6 +850,13 @@ be built until the app is in both stores.
 
 ## Task 2 — Cloud Run deploy: **not done**
 
+> **Superseded.** The deploy did happen afterwards, by someone with the
+> tooling: revision `succenergy-api-00002-ltn` is live at
+> https://succenergy-api-4612920383.us-east1.run.app, in **`us-east1`**, not
+> the `us-central1` this section plans. The rest of this section is left as
+> the record of what was true when it was written. See
+> [Postgres Migration Pass](#postgres-migration-pass) for the current state.
+
 One useful thing came out of it. The region is now **confirmed rather than
 guessed**, read off the live database:
 
@@ -958,3 +965,447 @@ Stated plainly.
    a client cannot distinguish "I just created it" from "it was already there"
    except by the status code, and should not branch on that for anything more
    than logging.
+
+---
+
+# Postgres Migration Pass
+
+Firestore is out. Supabase Postgres is now the single database for both
+application data and the RAG vector store. Firebase Auth stays, for token
+verification and later FCM.
+
+`npm run build`, `npm run lint` and `npm run typecheck` are all clean.
+
+Everything was built and verified against a **real Postgres 18.4** running
+locally, on a machine at **UTC+5** — which turned out to matter, see
+[the date-column bug](#the-one-real-bug-this-found). What could not be
+verified is listed plainly in [What could not be done](#what-could-not-be-done-1);
+the short version is that the local Postgres has no pgvector, and nothing was
+deployed.
+
+---
+
+## What changed, file by file
+
+### New
+
+| File | What it is |
+| --- | --- |
+| [backend/migrations/001_initial_schema.sql](backend/migrations/001_initial_schema.sql) | Fourteen application tables, their indexes, the `updated_at` trigger, check constraints mirroring the TypeScript unions, and RLS on everything |
+| [backend/migrations/002_rag_embeddings.sql](backend/migrations/002_rag_embeddings.sql) | `knowledge_chunks`, pgvector, the ivfflat index, RLS. Created empty. |
+| [backend/scripts/migrate.ts](backend/scripts/migrate.ts) | Applies pending migrations in filename order, tracks them in `schema_migrations`, safe to re-run |
+| [backend/src/config/database.ts](backend/src/config/database.ts) | The only file that constructs a pool. Connection string resolution, `query`, `withTransaction`, the readiness probe, the shutdown drain. |
+| [backend/scripts/seed.ts](backend/scripts/seed.ts) | Replaces `seed_firestore.ts`. Same Marisa Chissano persona, SQL inserts. |
+
+### Rewritten
+
+| File | Change |
+| --- | --- |
+| [backend/src/repositories/user.repository.ts](backend/src/repositories/user.repository.ts) | Postgres. Joined profile read, atomic create, allow-listed patch, one-statement delete. |
+| [backend/src/config/firebase.ts](backend/src/config/firebase.ts) | Auth only. Firestore handle and connectivity probe gone. |
+| [backend/src/config/env.ts](backend/src/config/env.ts) | `DATABASE_URL` in, `FIRESTORE_EMULATOR_HOST` out. New guards, below. |
+| [backend/src/config/secrets.ts](backend/src/config/secrets.ts) | `SECRET_NAMES.DATABASE_URL` registered, with the confirm-before-deploy warning |
+| [backend/src/routes/health.routes.ts](backend/src/routes/health.routes.ts) | `/ready` runs `select 1`; the check is reported as `database` rather than `firestore` |
+| [backend/src/index.ts](backend/src/index.ts) | `await initDatabase()` before `app.listen`; SIGTERM drains the pool after the HTTP server closes |
+| [backend/README.md](backend/README.md) | Data model, environment, local setup, security and deploy sections rewritten |
+| [backend/.env.example](backend/.env.example), [backend/package.json](backend/package.json), [backend/firebase.json](backend/firebase.json), [backend/.dockerignore](backend/.dockerignore) | `DATABASE_URL`, `npm run migrate`, Auth emulator only, `migrations/` excluded from the image |
+
+### Deleted
+
+`firestore.rules`, `firestore.indexes.json`, `src/utils/timestamps.ts`,
+`scripts/seed_firestore.ts`, and the Firestore emulator block in
+`firebase.json`.
+
+### Models
+
+The ten model files that imported `Timestamp` from `firebase-admin/firestore`
+now use native `Date`. Nothing else about them changed — field names, enum
+values and the `{en, pt}` bilingual type are all as they were. Doc comments
+that named Firestore paths now name tables.
+
+---
+
+## The layer rule held, with two exceptions that were the point
+
+The brief said everything above `repositories/` should survive unchanged, and
+that if a service or controller needed editing then the separation was not as
+clean as claimed.
+
+**Controllers, routes, schemas, middleware and error handling: not touched.**
+Not one line. The endpoint contract is byte-identical.
+
+**The service was edited**, in three places, and each one is a database
+concern moving *down* rather than a new one moving up:
+
+1. **It imported `Timestamp` from `firebase-admin/firestore`** to stamp times,
+   with `utils/timestamps.ts` existing solely to convert it. The previous
+   README defended this as "a value type, not a database handle". It was still
+   the database's type in a service. Now: `new Date()`, and the util file is
+   deleted.
+
+2. **It built dotted Firestore field paths.** `updateProfile` wrote
+   `patch['coachingPreferences.tone'] = …` because Firestore replaces a nested
+   map wholesale, so patching one preference would have dropped the other two.
+   That is Firestore's document model showing through a service method. The
+   service now passes a plain nested patch; the repository flattens it to
+   three columns. There is also a related hack gone — the service used to
+   *rebuild* the preferences object on the response because the repository
+   merged dotted keys literally. `update … returning *` makes that unnecessary.
+
+3. **`createProfile` was a read, then a create, then a hopeful re-read** on
+   failure, because two first requests for the same unknown uid could race and
+   Firestore had no atomic way to settle it. It is now one call:
+   `insert … on conflict (id) do nothing returning *`, and the repository
+   reads the winning row inside the same transaction when the insert lost.
+   The brief asked for this explicitly.
+
+Verified after the fact:
+
+```
+$ grep -rlE "from 'pg'|config/database" src/controllers src/services
+(nothing)
+$ grep -rlE "from 'express'" src/services src/repositories
+(nothing)
+```
+
+`routes/health.routes.ts` imports `checkDatabaseConnectivity` from
+`config/database.js`. That is a liveness probe, not a query, and it is the
+same exception the Firestore version had.
+
+---
+
+## What Postgres actually bought
+
+Not a list of features — the four things that are concretely better in this
+codebase than they were last week.
+
+**Account deletion is one statement.**
+
+```sql
+delete from users where id = $1;
+```
+
+Every child table cascades. The Firestore version was 90 lines: a
+`USER_SUBCOLLECTIONS` constant that a new subcollection had to be remembered
+into, a paged walk, a depth-first descent into `sessions/{id}/messages`, and
+batch-size arithmetic. The README even had a section warning that forgetting
+to update the list would orphan data. That whole class of mistake is gone —
+the constraint is declared once, at the table, and the database enforces it.
+
+**A profile read is one query instead of three.** Users, onboarding and
+subscription came from three documents in three places; they now come back
+through two left joins.
+
+**Creation is atomic instead of optimistic.** Covered above.
+
+**Milestones and action items are rows.** They were embedded arrays because
+Firestore made joins awkward. A milestone can now be updated without
+rewriting its goal.
+
+One more that is easy to miss: **local data survives a restart.** The
+Firestore emulator held everything in memory, so `npm run seed` was needed
+after every restart. Postgres is a database.
+
+---
+
+## The one real bug this found
+
+`date_of_birth` is a `date` column. node-postgres parses `date` into a JS
+`Date` at **local** midnight. On this machine — UTC+5 — `1991-04-17` would
+have come back as a Date at 05:00 local, and `.toISOString()` on it produces
+`1991-04-16T19:00:00.000Z`. **A date of birth silently a day early**, on every
+machine east of UTC, and correct on a UTC CI box, which is the worst kind.
+
+`config/database.ts` disables the parser for that type and keeps the wire
+value verbatim; the repository converts explicitly in UTC, in one place, in
+both directions. Verified on the UTC+5 machine:
+
+```
+"dateOfBirth": "1991-04-17T00:00:00.000Z"
+```
+
+The same rule applies to `target_date`, `due_date` and
+`progress_snapshots.date`, and the seed script uses it too.
+
+---
+
+## Two decisions worth flagging
+
+### Bilingual columns: paired for library content, single for written content
+
+The brief says bilingual content should be paired `_en` / `_pt` columns rather
+than jsonb, because the client wants to read and edit it in Supabase's table
+view. Its own column list then gives `exercises.title_en/pt` and
+`onboarding_responses.ambition_en/pt` as pairs, but `goals.title`,
+`chat_messages.text`, `coaching_sessions.summary`, `notifications.title/body`,
+`purpose_answers.answer` and `exercise_responses.suggested_action` as single
+columns.
+
+I followed the column list exactly, because it is coherent: **library content
+that an admin maintains in two languages is paired; content a person or the
+coach writes is one column, in the language it was written.** Under Firestore
+those single-language fields were `{en, pt}` maps holding the *same string
+twice*, because the Dart `asTyped` helper duplicates whatever the user types.
+The second copy never carried information.
+
+**This diverges from the Flutter models**, which type those fields as
+`Map<String, String>`. Nothing is broken today — no repository reads those
+tables in this pass. When the goals and coaching passes land, the repository
+should map one column to `{ en: value, pt: value }` on the way out, which is
+what `asTyped` already does on the Dart side. I did **not** change the
+TypeScript models to `string`, because the wire format the app expects is
+still a locale map and changing them would be a contract change for endpoints
+that do not exist yet. It is written into the README under
+"One divergence to settle in the next pass" so it is not discovered by
+surprise.
+
+### `documentsDeleted` keeps its name
+
+`DELETE /v1/me` still answers `{ "deleted": true, "documentsDeleted": 49 }`.
+There are no documents any more, but the endpoint contract was to stay exactly
+as it is, and renaming a response field would break a client for cosmetics.
+It counts rows now. The dependent rows are counted in the same transaction
+immediately before the delete, so the number is accurate.
+
+---
+
+## Verification
+
+Against a real Postgres 18.4 on port 55432, the Firebase Auth emulator, and
+the API on 8787.
+
+### 1. Build, lint, typecheck
+
+All three clean.
+
+### 2. Migrations
+
+Dropped and recreated the database, then ran `npm run migrate` three times.
+
+| Run | Result |
+| --- | --- |
+| 1, empty database | `001_initial_schema.sql` applied in 208ms. `002` failed at `create extension vector` and **rolled back**. |
+| 2 | `001` skipped — already recorded. `002` retried, failed identically, rolled back. |
+| 3 | Identical to run 2. |
+
+After the failed `002`: `schema_migrations` holds only `001`, the database has
+15 tables, and `to_regclass('public.knowledge_chunks')` is null. The rollback
+was complete — a failed migration leaves nothing behind and is not marked
+applied, so fixing the cause and re-running is the whole recovery procedure.
+
+The checksum guard was tested by appending a comment to an applied migration:
+
+```
+Migration failed: These migrations were edited after being applied:
+  - 001_initial_schema.sql
+```
+
+Restoring the file cleared it.
+
+**Migration 002 has never been applied end to end** — see
+[What could not be done](#what-could-not-be-done-1).
+
+### 3. Schema
+
+| Check | Result |
+| --- | --- |
+| Tables created | 14 application tables + `schema_migrations` |
+| Foreign keys | 12, **every one `on delete cascade`** (`confdeltype = 'c'`) |
+| RLS enabled | all 15 tables |
+| Policies | **0**, on all 15 |
+| `updated_at` triggers | `users`, `onboarding_responses`, `goals`, `purpose_answers`, `subscriptions` |
+
+### 4. Seed
+
+`npm run seed` writes 49 rows across twelve tables, plus 2 exercises and 5
+exercise steps in the shared library. Run twice: identical counts, no
+duplicates. Counts are read back from the database, not tallied by the script.
+
+### 5. Endpoints — 40 assertions, 40 passed
+
+| Group | Cases |
+| --- | --- |
+| Health | `/v1/health` 200; `/v1/health/ready` 200 reporting `database: ok` |
+| Auth | no token → 401; junk token → 401 |
+| Seeded persona | `GET /v1/me` 200 with the persona; `dateOfBirth` `1991-04-17T00:00:00.000Z`; `GET /v1/me/onboarding` 200, `isComplete: true`, `motivationBalance: 0.35` |
+| First contact | `GET` on a fresh uid → **404 `profile_not_found`**; `POST` → **201** with `countryCode` `mz` upper-cased to `MZ` and defaults Purpose / day 1 / streak 0 / direct-daily-reminders-on; `POST` again with a different name → **200**, `name` and `joinedAt` **unchanged**, no duplicate row; `email` in the body → 422; `preferredLanguage: "fr"` → 422 |
+| PATCH | Set `rhythm: weekly` and `remindersEnabled: false`, then patched **`tone` alone** → tone changed, **rhythm and remindersEnabled survived**, name untouched; unknown key → 422 |
+| Onboarding | All seven answers round-trip; `completedAt` server-stamped; `isComplete` derived; **UTF-8 byte-exact** through Postgres (Portuguese accents checked by comparing the request body to the response); re-submitting with a different `focusAreaKeys` **replaces** rather than merges, so a removed focus area is gone |
+
+### 6. Deletion cascade — counted across every table
+
+| Table | Before | After |
+| --- | --- | --- |
+| users | 1 | 0 |
+| onboarding_responses | 1 | 0 |
+| goals | 2 | 0 |
+| milestones | 6 | 0 |
+| action_items | 4 | 0 |
+| exercise_responses | 1 | 0 |
+| coaching_sessions | 2 | 0 |
+| chat_messages | 6 | 0 |
+| purpose_answers | 2 | 0 |
+| notifications | 2 | 0 |
+| subscriptions | 1 | 0 |
+| progress_snapshots | 21 | 0 |
+| **total** | **49** | **0** |
+| `exercises` / `exercise_steps` (shared, not the user's) | 2 / 5 | **2 / 5** |
+
+The response reported `documentsDeleted: 49`. The Firebase Auth record was
+removed — the account no longer appears in the emulator — and the token minted
+before the delete now returns **401**, which is `checkRevoked` doing its job.
+
+### 7. Readiness and fail-fast
+
+| Case | Result |
+| --- | --- |
+| `/v1/health/ready`, database up | **200**, `database: ok` |
+| `/v1/health`, database **down** | **200** — liveness is process state, so Cloud Run does not restart a healthy instance over a slow database minute |
+| `/v1/health/ready`, database **down** | **503**, `database: unreachable` |
+| Database back up | **200** again, no restart needed — the pool reconnects |
+| Boot with the database down | Exits before listening: `Cannot reach the database. The server will not start.` with the pooler hint and `connect ECONNREFUSED`. **No connection string in the output.** |
+
+### 8. Row level security — the check the client asked for
+
+Both Supabase roles were recreated locally **with the broad grants Supabase
+gives them by default** (`grant select, insert, update, delete on all tables
+in schema public`), so RLS is the only thing in the way. Rows were present
+throughout, and the service role could see them — so a zero is RLS, not an
+empty table.
+
+| Role | Rows visible | Writes |
+| --- | --- | --- |
+| `anon` | **0** from all 15 tables | refused on all 15 |
+| `authenticated` | **0** from all 15 tables | refused on all 15 |
+| service role | all rows | permitted |
+
+`knowledge_chunks` gets the same treatment; its RLS was verified in the
+throwaway database where the rest of migration 002 was applied.
+
+### 9. No SQL built by concatenation
+
+Every interpolation in a SQL string was inspected. There are six, all in
+`user.repository.ts`, and none of them carries a value:
+
+- `USER_COLUMNS`, `ONBOARDING_ALIASED_COLUMNS`, `SUBSCRIPTION_ALIASED_COLUMNS`
+  — string constants defined in the file.
+- `USER_PATCH_COLUMNS[key]` — a column name from a fixed map, where `key` is a
+  typed union, so a field name a client sends cannot become SQL.
+- `$${String(values.length)}` — a placeholder *number*.
+
+Every value goes in as `$n`. No credentials in code; `.env` is git-ignored and
+nothing was committed that holds one.
+
+### 10. Logs
+
+35 log lines from the full run, swept for `example.com`, `Marisa`,
+`Chissano`, `Ana Marques`, `Bearer`, `eyJ`, `password`, `postgresql:`, the
+database port, Portuguese answer text, both dates of birth, `authorization`
+and `cookie`. **All absent.**
+
+The complete set of field names that appear anywhere in the logs:
+
+```
+code documentsDeleted environment isComplete level maxPoolClients message
+method mode path port req reqId requestId res responseTime service severity
+status statusCode time uid version
+```
+
+Method, route path, status, duration, request id, uid, and operational
+metadata. Nothing a user typed, no email, no token, no connection string.
+
+### 11. Shutdown
+
+Windows has no real SIGTERM, so the handler was invoked directly with
+`process.emit('SIGTERM')` against the real entrypoint — the same code path the
+OS takes. With five connections checked out:
+
+```
+connections held before shutdown: 5
+"signal":"SIGTERM","message":"Shutting down"
+"message":"Shutdown complete"
+```
+
+`pg_stat_activity` afterwards: **0** connections with
+`application_name = 'succenergy-api'`. The pool drains rather than leaving
+connections for Supabase's pooler to time out, which matters when the
+server-side pool is fifteen wide.
+
+---
+
+## What could not be done
+
+Stated plainly.
+
+1. **Migration 002 has never been applied end to end.** The local Postgres
+   available on this machine has no pgvector, so `create extension vector`
+   stops it. That is the correct failure and the transaction rolls back
+   cleanly — verified three times — but it means the file has not run in full
+   anywhere.
+
+   Everything in 002 **except** the extension and the ivfflat index *was*
+   verified, by applying the file to a throwaway database with exactly two
+   substitutions (`vector(1024)` → `text`, ivfflat → btree) and nothing else
+   changed: all ten columns, both check constraints, the `principle` and
+   `content_type` indexes, and RLS on with zero policies. The two unverified
+   statements are standard pgvector and should apply on Supabase, where the
+   extension exists — but that is an expectation, not a fact, and it should be
+   the first thing checked when the migrations are run there.
+
+2. **Nothing was deployed, and the live service still runs the Firestore
+   build.** Checked rather than assumed: revision `succenergy-api-00002-ltn`
+   at https://succenergy-api-4612920383.us-east1.run.app answers
+   `/v1/health/ready` with `checks.firestore`, `environment: production`. So
+   **the API in production is reading Firestore and this repository is not** —
+   they are out of step until someone redeploys.
+
+   Same three blockers as the previous two passes, re-checked: no `gcloud`
+   CLI on the machine, no Docker daemon (Docker Desktop installed, no
+   registered service, `docker info` cannot reach the pipe), and the
+   signed-in Firebase account is read-only on the project.
+
+   Two of the prerequisites are the client's, not a tooling problem:
+   **the connection string has to be in Secret Manager** and **pgvector has to
+   be enabled** on the Supabase project. The README's deploy section lists
+   both, in order, ahead of the deploy itself.
+
+3. **The secret name is a placeholder.** `SECRET_NAMES.DATABASE_URL` is
+   `'supabase-database-url'`. The client is adding the entry; if she names it
+   anything else, that one string has to change. A wrong name fails the boot
+   with a clear message rather than running degraded — but it fails the
+   *deploy*, so it is worth confirming first. The constant carries the warning
+   in a comment and the README repeats it.
+
+4. **`--max-instances 10` and `max: 5` are in tension with a 15-connection
+   Supabase pool.** Ten warm instances would want fifty connections. In
+   practice they are rarely all warm and the transaction pooler multiplexes,
+   so this is fine as configured — but **raising either number without raising
+   the Supabase compute tier is how this service starts failing under load.**
+   Noted in the README next to the deploy command rather than left as a
+   surprise.
+
+5. **The ivfflat index is meaningless until it is rebuilt.** ivfflat clusters
+   the rows that exist when it is created; built against an empty table it
+   stays useless as rows arrive. After the first ingestion run:
+   `reindex index knowledge_chunks_embedding_idx`, with `lists` sized to
+   roughly rows/1000. This is in a comment in the migration and in the README,
+   because it is exactly the kind of thing that gets forgotten and then shows
+   up as "retrieval is slow".
+
+6. **The Docker image build is still unverified** — third pass in a row, same
+   missing daemon. `migrations/` was added to `.dockerignore` this pass, which
+   changes the build context, so it is worth a `docker build` on a machine
+   with a daemon before the redeploy.
+
+7. **Bilingual single-column fields diverge from the Flutter models.**
+   Covered above under [Two decisions worth flagging](#two-decisions-worth-flagging).
+   No endpoint is affected in this pass; the goals and coaching passes have to
+   settle it.
+
+8. **RLS was verified against a local Postgres, not against Supabase.** The
+   local check recreated the `anon` and `authenticated` roles with Supabase's
+   default grants, which is a faithful reproduction of the mechanism — RLS on,
+   no policies, grants present but useless. It is not the same as pointing the
+   client's real anon key at the client's real project. **Re-run that check
+   once the migrations are applied on Supabase**, before any real data is in
+   there. It is the client's explicit request, and it is one query.
