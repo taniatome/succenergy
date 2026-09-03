@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/localization/locale_provider.dart';
 import '../../core/localization/string_extensions.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/buttons/primary_button.dart';
@@ -75,6 +76,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       dateOfBirth: _dob!,
       countryCode: _countryCode!,
       activity: _activity,
+      preferredLanguage: context.read<LocaleProvider>().code,
+      acceptedTerms: _acceptedTerms,
+      confirmedInfoTrue: _confirmedTruth,
     );
     if (!mounted) {
       return;

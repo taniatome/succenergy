@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -5,8 +6,13 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
 import 'app/app.dart';
+import 'core/auth/auth_state.dart';
+import 'core/auth/secure_session_store.dart';
 import 'core/localization/locale_provider.dart';
-import 'data/mock/repositories/mock_auth_repository.dart';
+import 'core/motion/app_durations.dart';
+import 'core/network/api_client.dart';
+import 'data/implementations/firebase_auth_repository.dart';
+import 'data/implementations/unavailable_auth_repository.dart';
 import 'data/mock/repositories/mock_coach_repository.dart';
 import 'data/mock/repositories/mock_exercises_repository.dart';
 import 'data/mock/repositories/mock_goals_repository.dart';
@@ -25,9 +31,10 @@ import 'data/repositories/user_repository.dart';
 
 /// Application entry point.
 ///
-/// This is the only file that names a repository implementation. Swapping the
-/// mock layer for real API clients means changing the eight `create` lines
-/// below and adding files under `data/`; no widget changes at all.
+/// The only file that names a repository implementation. Authentication runs
+/// against Firebase and the Succenergy API; goals, exercises, the coach,
+/// progress and notifications are still mock, and swapping any of them is a
+/// change to one `create` line below.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
@@ -36,11 +43,17 @@ Future<void> main() async {
   // for type and never falls back to a system face.
   GoogleFonts.config.allowRuntimeFetching = false;
 
+  final bool firebaseReady = await _startFirebase();
+  final AuthRepository auth = _authRepository(firebaseReady);
+
   runApp(
     MultiProvider(
       providers: <SingleChildWidget>[
         ChangeNotifierProvider<LocaleProvider>(create: (_) => LocaleProvider()),
-        Provider<AuthRepository>(create: (_) => MockAuthRepository()),
+        Provider<AuthRepository>.value(value: auth),
+        ChangeNotifierProvider<AuthState>(
+          create: (_) => _authState(firebaseReady, auth),
+        ),
         Provider<UserRepository>(create: (_) => MockUserRepository()),
         Provider<GoalsRepository>(create: (_) => MockGoalsRepository()),
         Provider<ExercisesRepository>(create: (_) => MockExercisesRepository()),
@@ -50,10 +63,47 @@ Future<void> main() async {
           create: (_) => MockNotificationsRepository(),
         ),
         Provider<SubscriptionRepository>(
-          create: (_) => MockSubscriptionRepository(),
+          create:
+              (BuildContext context) =>
+                  MockSubscriptionRepository(context.read<AuthRepository>()),
         ),
       ],
       child: const SuccenergyApp(),
     ),
   );
+}
+
+/// Starts the Firebase SDK, reporting whether it came up.
+///
+/// A missing `google-services.json` or `GoogleService-Info.plist` throws here.
+/// That is a build configuration problem rather than something a user can act
+/// on, so the app carries on into a state where sign-in reports itself
+/// unavailable instead of dying on a red screen before anything is drawn.
+Future<bool> _startFirebase() async {
+  try {
+    await Firebase.initializeApp();
+    return true;
+  } on Exception {
+    return false;
+  }
+}
+
+AuthRepository _authRepository(bool firebaseReady) {
+  if (!firebaseReady) {
+    return const UnavailableAuthRepository();
+  }
+  return FirebaseAuthRepository(
+    api: ApiClient(),
+    store: const SecureSessionStore(),
+  );
+}
+
+/// The splash sequence is held for its full run before the first routing
+/// decision, so a session that resolves in a frame does not cut the brand
+/// moment off mid-bloom.
+AuthState _authState(bool firebaseReady, AuthRepository auth) {
+  if (!firebaseReady) {
+    return AuthState.unavailable();
+  }
+  return AuthState(resolver: auth, minimumHold: AppDurations.splashHold);
 }

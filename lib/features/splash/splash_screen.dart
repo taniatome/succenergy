@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
-import '../../app/routes.dart';
 import '../../core/motion/app_curves.dart';
 import '../../core/motion/app_durations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/branding/succenergy_logo.dart';
 import '../../core/widgets/branding/succenergy_wordmark.dart';
-import '../../data/repositories/auth_repository.dart';
 
 /// The launch screen.
 ///
-/// The symbol resolves out of a radial bloom that expands behind it, the
-/// wordmark settles beneath, and the app moves on. This is the first thing
-/// seen on every launch, so it is given room to land.
+/// The symbol resolves out of a radial bloom that expands behind it and the
+/// wordmark settles beneath. This is the first thing seen on every launch, so
+/// it is given room to land.
+///
+/// It does not decide where to go next. The router holds the app here while
+/// the session is still being resolved and moves it the moment that settles,
+/// which is the same rule every other screen is protected by.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -53,18 +53,9 @@ class _SplashScreenState extends State<SplashScreen>
     _started = true;
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
       _controller.value = 1;
-      Future<void>.delayed(AppDurations.medium, _leave);
       return;
     }
-    _controller.forward().whenComplete(_leave);
-  }
-
-  void _leave() {
-    if (!mounted) {
-      return;
-    }
-    final bool loggedIn = context.read<AuthRepository>().isLoggedIn;
-    context.go(loggedIn ? Routes.dashboard : Routes.welcome);
+    _controller.forward();
   }
 
   @override
@@ -142,7 +133,7 @@ class _SplashScreenState extends State<SplashScreen>
       opacity: _wordmark.value,
       child: Transform.translate(
         offset: Offset(0, 12 * (1 - _wordmark.value)),
-        child: const SuccenergyWordmark(fullBleed: true),
+        child: const SuccenergyWordmark(),
       ),
     );
   }

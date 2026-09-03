@@ -26,11 +26,16 @@ enum AuthStatus {
 /// and redirects on every notification, which is why no screen in the app
 /// checks whether anyone is signed in.
 class AuthState extends ChangeNotifier {
-  AuthState({required SessionResolver resolver, FirebaseAuth? auth})
-    : _resolver = resolver,
-      _auth = auth ?? FirebaseAuth.instance,
-      isAvailable = true {
-    _subscription = _auth!.authStateChanges().listen(_onUserChanged);
+  AuthState({
+    required SessionResolver resolver,
+    FirebaseAuth? auth,
+    this.minimumHold = Duration.zero,
+  }) : _resolver = resolver,
+       _auth = auth ?? FirebaseAuth.instance,
+       isAvailable = true {
+    _subscription = (auth ?? FirebaseAuth.instance)
+        .authStateChanges()
+        .listen(_onUserChanged);
   }
 
   /// The state to run in when Firebase could not start.
@@ -43,7 +48,16 @@ class AuthState extends ChangeNotifier {
     : _resolver = null,
       _auth = null,
       isAvailable = false,
-      _status = AuthStatus.unauthenticated;
+      minimumHold = Duration.zero,
+      _status = AuthStatus.unauthenticated,
+      _leftLoading = true;
+
+  /// How long the very first answer is held back for.
+  ///
+  /// Firebase usually reports within a frame, which would replace the splash
+  /// before its brand sequence has drawn. Held here rather than in the splash
+  /// screen because the router moves the app, not the screen.
+  final Duration minimumHold;
 
   final SessionResolver? _resolver;
   final FirebaseAuth? _auth;
@@ -135,8 +149,24 @@ class AuthState extends ChangeNotifier {
     _set(AuthStatus.authenticated);
   }
 
+  bool _leftLoading = false;
+  final Stopwatch _sinceLaunch = Stopwatch()..start();
+
   void _set(AuthStatus status) {
     _status = status;
+    if (_leftLoading || status == AuthStatus.loading) {
+      notifyListeners();
+      return;
+    }
+    _leftLoading = true;
+    unawaited(_notifyAfterHold());
+  }
+
+  Future<void> _notifyAfterHold() async {
+    final Duration remaining = minimumHold - _sinceLaunch.elapsed;
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
+    }
     notifyListeners();
   }
 

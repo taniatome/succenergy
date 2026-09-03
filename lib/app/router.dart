@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../core/auth/auth_state.dart';
 import '../core/motion/page_transitions.dart';
 import '../data/repositories/coach_repository.dart';
 import '../data/repositories/exercises_repository.dart';
 import '../data/repositories/goals_repository.dart';
 import '../data/repositories/notifications_repository.dart';
+import '../data/repositories/subscription_repository.dart';
 import '../data/repositories/user_repository.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/admin/admin_gate_screen.dart';
@@ -43,9 +45,9 @@ import '../features/subscription/subscription_screen.dart';
 import '../features/trial/trial_screen.dart';
 import '../features/trial/trial_welcome_screen.dart';
 import '../features/welcome/welcome_screen.dart';
+import 'launch_gate.dart';
 import 'routes.dart';
 import 'shell_frame.dart';
-import 'subscription_gate.dart';
 
 /// The app's complete route table.
 ///
@@ -56,10 +58,13 @@ import 'subscription_gate.dart';
 class AppRouter {
   const AppRouter._();
 
-  static GoRouter build() {
+  static GoRouter build(AuthState auth) {
     return GoRouter(
       initialLocation: Routes.splash,
-      redirect: SubscriptionGate.redirect,
+      // The router watches the session and re-runs the gate on every change,
+      // so a sign-in, a sign-out or a revoked token moves the app on its own.
+      refreshListenable: auth,
+      redirect: LaunchGate.redirect,
       routes: <RouteBase>[
         _page(Routes.splash, (_) => const SplashScreen()),
         _page(Routes.welcome, (_) => const WelcomeScreen()),
@@ -258,6 +263,7 @@ class AppRouter {
                   create:
                       (BuildContext context) => ExercisesProvider(
                         context.read<ExercisesRepository>(),
+                        context.read<SubscriptionRepository>(),
                       ),
                   child: const ExercisesScreen(),
                 ),

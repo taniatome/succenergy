@@ -40,6 +40,7 @@ class AppStrings {
     'common.active': 'Active',
     'common.inProgress': 'In progress',
     'common.notStarted': 'Not started',
+    'common.offline': 'Offline. Showing what was last saved.',
 
     // --- Principles --------------------------------------------------------
     'principle.purpose': 'Purpose',
@@ -91,13 +92,14 @@ class AppStrings {
     'auth.register.eyebrow': 'Create account',
     'auth.register.title': 'Begin the first cycle',
     'auth.register.subtitle':
-        'Seven questions and your coach will know how to work with you.',
+        'Seven questions and your AI Succenergy Coach will know how to work '
+        'with you.',
     'auth.field.name': 'Full name',
     'auth.field.email': 'Email',
     'auth.field.dob': 'Date of birth',
     'auth.field.country': 'Country',
     'auth.field.activity': 'Activity',
-    'auth.hint.name': 'Tânia Tomé',
+    'auth.hint.name': 'Your full name',
     'auth.hint.email': 'taniatome@succenergy.com',
     'auth.activity.student': 'Student | Minorities',
     'auth.activity.professional': 'Professional',
@@ -200,8 +202,8 @@ class AppStrings {
     'trial.eyebrow': 'Before you begin',
     'trial.title': 'Seven days, one dollar',
     'trial.subtitle':
-        'The app is free to download. The coach, the exercises and your '
-        'progress open the moment the trial starts.',
+        'The app is free to download. The coach, your goals and your progress '
+        'open the moment the trial starts.',
     'trial.after.label': 'After the trial',
     'trial.after.value': '{price} a month',
     'trial.after.student':
@@ -210,13 +212,21 @@ class AppStrings {
         'The Professional rate, from what you chose at registration.',
     'trial.unlock.title': 'What the trial opens',
     'trial.unlock.coach': 'The AI Coach, with no message limit',
-    'trial.unlock.exercises': 'Every exercise across the seven principles',
+    'trial.unlock.exercises': 'The Purpose exercises, to open the cycle',
     'trial.unlock.goals': 'Goals, actions and milestones',
     'trial.unlock.progress': 'Your full progress and cycle history',
     'trial.unlock.library': 'Recharge with Succenergy and the library',
     'trial.cta': 'Start 7-day trial',
-    'trial.smallPrint':
-        'Renews at {price} a month after {days} days. Cancel anytime.',
+    'trial.billing.student':
+        'After the trial, the Students & Minorities rate of {price} per month '
+        'will be charged automatically; you can cancel anytime before the next '
+        'billing date, although we encourage you to try the AI Succenergy '
+        'Coach for one month and see how it works for you.',
+    'trial.billing.professional':
+        'After the trial, the Professional rate of {price} per month will be '
+        'charged automatically; you can cancel anytime before the next billing '
+        'date, although we encourage you to try the AI Succenergy Coach for '
+        'one month and see how it works for you.',
     'trialWelcome.eyebrow': 'Welcome',
     'trialWelcome.message':
         'Congratulations, you are on the path to becoming a Succenergy '
@@ -335,6 +345,11 @@ class AppStrings {
     'exercises.card.completed': 'Completed',
     'exercises.card.start': 'Start',
     'exercises.card.review': 'Review',
+    'exercises.locked.badge': 'Locked',
+    'exercises.locked.card': 'Open with a subscription',
+    'exercises.locked.note':
+        'Your trial opens Purpose. A subscription opens the other six '
+        'principles.',
     'exercises.empty.title': 'Nothing here for this principle yet',
     'exercises.empty.body':
         'Pick another principle above, or start with Purpose to open the cycle.',
@@ -431,26 +446,22 @@ class AppStrings {
     'subscription.current': 'Your plan',
     'subscription.cta.choose': 'Choose this plan',
     'subscription.cta.current': 'Current plan',
-    'subscription.compare': 'What the trial opens',
+    'subscription.compare.trial': 'What a subscription opens',
+    'subscription.compare.included': 'Included in your plan',
     'subscription.premiumColumn': 'Included',
     'subscription.lockedColumn': 'Locked',
     'subscription.feature.coaching': 'AI coaching',
-    'subscription.feature.coaching.free': 'Five messages a week',
     'subscription.feature.coaching.premium': 'Unlimited',
     'subscription.feature.memory': 'Coach memory',
-    'subscription.feature.memory.free': 'Current session only',
     'subscription.feature.memory.premium': 'Full history',
     'subscription.feature.exercises': 'Exercise library',
-    'subscription.feature.exercises.free': 'Purpose and Passion',
+    'subscription.feature.exercises.trial': 'Purpose only',
     'subscription.feature.exercises.premium': 'All seven principles',
     'subscription.feature.goals': 'Active goals',
-    'subscription.feature.goals.free': 'One at a time',
     'subscription.feature.goals.premium': 'Unlimited',
     'subscription.feature.personalisation': 'Personalisation',
-    'subscription.feature.personalisation.free': 'Basic',
     'subscription.feature.personalisation.premium': 'Adaptive to your profile',
     'subscription.feature.progress': 'Progress reports',
-    'subscription.feature.progress.free': 'Weekly summary',
     'subscription.feature.progress.premium': 'Full analytics',
     'subscription.note':
         'Plans are shown for review. Payment is not enabled in this build.',
@@ -500,6 +511,8 @@ class AppStrings {
     'settings.connect.youtube': 'YouTube',
     'settings.external': 'Opens in your browser',
     'settings.item.help': 'Help and about',
+    'settings.item.terms': 'Terms and conditions',
+    'settings.item.privacy': 'Privacy policy',
     'settings.item.admin': 'Management console',
     'settings.item.logout': 'Log out',
     'settings.item.deleteAccount': 'Delete account',
@@ -603,6 +616,7 @@ class AppStrings {
     'common.active': 'Ativo',
     'common.inProgress': 'Em curso',
     'common.notStarted': 'Por começar',
+    'common.offline': 'Sem ligação. A mostrar o último estado guardado.',
 
     // --- Principles --------------------------------------------------------
     'principle.purpose': 'Purpose',
@@ -657,13 +671,14 @@ class AppStrings {
     'auth.register.eyebrow': 'Criar conta',
     'auth.register.title': 'Comece o primeiro ciclo',
     'auth.register.subtitle':
-        'Sete perguntas e o seu coach saberá como trabalhar consigo.',
+        'Sete perguntas e o seu AI Succenergy Coach saberá como trabalhar '
+        'consigo.',
     'auth.field.name': 'Nome completo',
     'auth.field.email': 'Email',
     'auth.field.dob': 'Data de nascimento',
     'auth.field.country': 'País',
     'auth.field.activity': 'Atividade',
-    'auth.hint.name': 'Tânia Tomé',
+    'auth.hint.name': 'O seu nome completo',
     'auth.hint.email': 'taniatome@succenergy.com',
     'auth.activity.student': 'Estudante | Minorias',
     'auth.activity.professional': 'Profissional',
@@ -769,9 +784,8 @@ class AppStrings {
     'trial.eyebrow': 'Antes de começar',
     'trial.title': 'Sete dias, um dólar',
     'trial.subtitle':
-        'A aplicação é gratuita. O coach, os exercícios '
-        'e a sua evolução abrem no momento em que o teste '
-        'começa.',
+        'A aplicação é gratuita. O coach, os seus objetivos e a sua evolução '
+        'abrem no momento em que o teste começa.',
     'trial.after.label': 'Depois do teste',
     'trial.after.value': '{price} por mês',
     'trial.after.student':
@@ -780,14 +794,21 @@ class AppStrings {
         'A mensalidade Profissional, conforme escolheu no registo.',
     'trial.unlock.title': 'O que o teste abre',
     'trial.unlock.coach': 'O Coach de IA, sem limite de mensagens',
-    'trial.unlock.exercises': 'Todos os exercícios dos sete princípios',
+    'trial.unlock.exercises': 'Os exercícios de Purpose, para abrir o ciclo',
     'trial.unlock.goals': 'Objetivos, ações e marcos',
     'trial.unlock.progress': 'Toda a sua evolução e o histórico de ciclos',
     'trial.unlock.library': 'Recarregue com a Succenergy e a biblioteca',
     'trial.cta': 'Começar o teste de 7 dias',
-    'trial.smallPrint':
-        'Renova a {price} por mês depois de {days} dias. Cancele '
-        'quando quiser.',
+    'trial.billing.student':
+        'Depois do teste, a mensalidade Estudantes & Minorias de {price} por '
+        'mês será cobrada automaticamente; pode cancelar quando quiser antes '
+        'da data da próxima cobrança, embora o encorajemos a experimentar o '
+        'AI Succenergy Coach durante um mês e a ver como funciona para si.',
+    'trial.billing.professional':
+        'Depois do teste, a mensalidade Profissional de {price} por mês será '
+        'cobrada automaticamente; pode cancelar quando quiser antes da data '
+        'da próxima cobrança, embora o encorajemos a experimentar o AI '
+        'Succenergy Coach durante um mês e a ver como funciona para si.',
     'trialWelcome.eyebrow': 'Bem-vindo',
     'trialWelcome.message':
         'Parabéns, está no caminho para se tornar um vencedor '
@@ -907,6 +928,11 @@ class AppStrings {
     'exercises.card.completed': 'Concluído',
     'exercises.card.start': 'Começar',
     'exercises.card.review': 'Rever',
+    'exercises.locked.badge': 'Bloqueado',
+    'exercises.locked.card': 'Abrir com uma subscrição',
+    'exercises.locked.note':
+        'O seu teste abre o Purpose. Uma subscrição abre os outros seis '
+        'princípios.',
     'exercises.empty.title': 'Ainda não há nada para este princípio',
     'exercises.empty.body':
         'Escolha outro princípio acima, ou comece por Purpose para abrir o ciclo.',
@@ -1003,26 +1029,22 @@ class AppStrings {
     'subscription.current': 'O seu plano',
     'subscription.cta.choose': 'Escolher este plano',
     'subscription.cta.current': 'Plano atual',
-    'subscription.compare': 'O que o teste abre',
+    'subscription.compare.trial': 'O que a subscrição abre',
+    'subscription.compare.included': 'Incluído no seu plano',
     'subscription.premiumColumn': 'Incluído',
     'subscription.lockedColumn': 'Bloqueado',
     'subscription.feature.coaching': 'Coaching por IA',
-    'subscription.feature.coaching.free': 'Cinco mensagens por semana',
     'subscription.feature.coaching.premium': 'Sem limite',
     'subscription.feature.memory': 'Memória do coach',
-    'subscription.feature.memory.free': 'Só a sessão atual',
     'subscription.feature.memory.premium': 'Histórico completo',
     'subscription.feature.exercises': 'Biblioteca de exercícios',
-    'subscription.feature.exercises.free': 'Purpose e Passion',
+    'subscription.feature.exercises.trial': 'Apenas o Purpose',
     'subscription.feature.exercises.premium': 'Os sete princípios',
     'subscription.feature.goals': 'Objetivos ativos',
-    'subscription.feature.goals.free': 'Um de cada vez',
     'subscription.feature.goals.premium': 'Sem limite',
     'subscription.feature.personalisation': 'Personalização',
-    'subscription.feature.personalisation.free': 'Básica',
     'subscription.feature.personalisation.premium': 'Adaptada ao seu perfil',
     'subscription.feature.progress': 'Relatórios de evolução',
-    'subscription.feature.progress.free': 'Resumo semanal',
     'subscription.feature.progress.premium': 'Análise completa',
     'subscription.note':
         'Os planos são apresentados para revisão. O pagamento não está ativo nesta versão.',
@@ -1072,6 +1094,8 @@ class AppStrings {
     'settings.connect.youtube': 'YouTube',
     'settings.external': 'Abre no seu navegador',
     'settings.item.help': 'Ajuda e sobre',
+    'settings.item.terms': 'Termos e condições',
+    'settings.item.privacy': 'Política de privacidade',
     'settings.item.admin': 'Consola de gestão',
     'settings.item.logout': 'Terminar sessão',
     'settings.item.deleteAccount': 'Eliminar conta',

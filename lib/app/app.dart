@@ -3,9 +3,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../core/auth/auth_state.dart';
 import '../core/constants/app_constants.dart';
 import '../core/localization/locale_provider.dart';
 import '../core/theme/app_theme.dart';
+import '../core/widgets/offline_banner.dart';
 import 'router.dart';
 
 /// The root widget: theme, locale and router in one place.
@@ -17,7 +19,7 @@ class SuccenergyApp extends StatefulWidget {
 }
 
 class _SuccenergyAppState extends State<SuccenergyApp> {
-  final GoRouter _router = AppRouter.build();
+  late final GoRouter _router = AppRouter.build(context.read<AuthState>());
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +42,10 @@ class _SuccenergyAppState extends State<SuccenergyApp> {
         return MediaQuery.withClampedTextScaling(
           minScaleFactor: 0.9,
           maxScaleFactor: 1.25,
-          child: child ?? const SizedBox.shrink(),
+          // The banner sits above every route rather than inside any screen:
+          // losing the network is a property of the app, not of the page that
+          // happened to be open when it went.
+          child: OfflineBanner(child: child ?? const SizedBox.shrink()),
         );
       },
     );

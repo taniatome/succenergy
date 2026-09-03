@@ -13,8 +13,22 @@ class Routes {
   static const String quiz = '/quiz';
 
   static const String login = '/login';
-  static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
+
+  /// Registration, step one of three: email and password.
+  static const String register = '/register';
+
+  /// Sub-route segment for step two, relative to [register].
+  static const String registerAboutSegment = 'about';
+
+  /// Sub-route segment for step three, relative to [register].
+  static const String registerConsentSegment = 'consent';
+
+  /// Registration, step two of three: name, date of birth, country, activity.
+  static const String registerAbout = '$register/$registerAboutSegment';
+
+  /// Registration, step three of three: consent and the summary.
+  static const String registerConsent = '$register/$registerConsentSegment';
   static const String onboarding = '/onboarding';
 
   /// The paywall, between registration and onboarding.
