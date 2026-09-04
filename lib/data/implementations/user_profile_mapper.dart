@@ -71,6 +71,55 @@ class UserProfileMapper {
     );
   }
 
+  // --- Management console --------------------------------------------------
+
+  /// A page of `/v1/admin/users` as the console's directory list.
+  ///
+  /// The directory row is narrower than a full profile — it has no coaching
+  /// preferences and no onboarding — so the absent fields take the same
+  /// resting defaults `fromJson` gives them.
+  static List<User> directoryFromJson(List<Object?> page) {
+    return page
+        .whereType<Map<String, Object?>>()
+        .map(
+          (Map<String, Object?> entry) =>
+              fromJson(entry, uid: entry['id'] as String? ?? ''),
+        )
+        .toList(growable: false);
+  }
+
+  /// `/v1/admin/stats` as the four tiles the console renders.
+  ///
+  /// Keyed by localisation key and formatted here, because the interface
+  /// promises display-ready strings — the console shows them verbatim and has
+  /// no number formatter of its own.
+  static Map<String, String> statsFromJson(Map<String, Object?> stats) {
+    final int users = _int(stats['users']) ?? 0;
+    final int active = _int(stats['activeSubscriptions']) ?? 0;
+
+    return <String, String>{
+      'admin.stat.users': _grouped(users),
+      'admin.stat.active': _grouped(active),
+      'admin.stat.premium':
+          users == 0 ? '0%' : '${((active / users) * 100).round()}%',
+      'admin.stat.sessions': _grouped(_int(stats['sessions']) ?? 0),
+    };
+  }
+
+  /// Thousands separated, which is how the tiles were mocked up.
+  static String _grouped(int value) {
+    final String digits = value.abs().toString();
+    final StringBuffer out = StringBuffer(value < 0 ? '-' : '');
+
+    for (int i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        out.write(',');
+      }
+      out.write(digits[i]);
+    }
+    return out.toString();
+  }
+
   static Object? _preference(Map<String, Object?> json, String key) {
     final Object? preferences = json['coachingPreferences'];
     return preferences is Map<String, Object?> ? preferences[key] : null;

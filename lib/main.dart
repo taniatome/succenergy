@@ -15,13 +15,13 @@ import 'core/motion/app_durations.dart';
 import 'core/network/api_client.dart';
 import 'data/implementations/api_exercises_repository.dart';
 import 'data/implementations/api_goals_repository.dart';
+import 'data/implementations/api_user_repository.dart';
 import 'data/implementations/firebase_auth_repository.dart';
 import 'data/implementations/unavailable_auth_repository.dart';
 import 'data/mock/repositories/mock_coach_repository.dart';
 import 'data/mock/repositories/mock_notifications_repository.dart';
 import 'data/mock/repositories/mock_progress_repository.dart';
 import 'data/mock/repositories/mock_subscription_repository.dart';
-import 'data/mock/repositories/mock_user_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/coach_repository.dart';
 import 'data/repositories/exercises_repository.dart';
@@ -33,9 +33,10 @@ import 'data/repositories/user_repository.dart';
 
 /// Application entry point.
 ///
-/// The only file that names a repository implementation. Authentication,
-/// goals and exercises run against Firebase and the Succenergy API; the rest
-/// are still mock, and swapping one is a change to one `create` line below.
+/// The only file that names a repository implementation. Authentication, the
+/// profile, goals and exercises run against Firebase and the Succenergy API;
+/// the rest are still mock, and swapping one is a change to one `create` line
+/// below.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
@@ -62,7 +63,7 @@ Future<void> main() async {
         ChangeNotifierProvider<AuthState>(
           create: (_) => _authState(firebaseReady, auth),
         ),
-        Provider<UserRepository>(create: (_) => MockUserRepository()),
+        Provider<UserRepository>(create: (_) => ApiUserRepository(api)),
         Provider<GoalsRepository>(create: (_) => ApiGoalsRepository(api)),
         Provider<ExercisesRepository>(
           create: (_) => ApiExercisesRepository(api),
