@@ -13,6 +13,7 @@ import 'core/auth/session_signal.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/motion/app_durations.dart';
 import 'core/network/api_client.dart';
+import 'data/implementations/api_coach_repository.dart';
 import 'data/implementations/api_exercises_repository.dart';
 import 'data/implementations/api_goals_repository.dart';
 import 'data/implementations/api_notifications_repository.dart';
@@ -20,7 +21,6 @@ import 'data/implementations/api_progress_repository.dart';
 import 'data/implementations/api_user_repository.dart';
 import 'data/implementations/firebase_auth_repository.dart';
 import 'data/implementations/unavailable_auth_repository.dart';
-import 'data/mock/repositories/mock_coach_repository.dart';
 import 'data/mock/repositories/mock_subscription_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/coach_repository.dart';
@@ -67,7 +67,7 @@ Future<void> main() async {
         Provider<ExercisesRepository>(
           create: (_) => ApiExercisesRepository(api),
         ),
-        Provider<CoachRepository>(create: (_) => MockCoachRepository()),
+        Provider<CoachRepository>(create: (_) => ApiCoachRepository(api)),
         Provider<ProgressRepository>(create: (_) => ApiProgressRepository(api)),
         Provider<NotificationsRepository>(
           create: (_) => ApiNotificationsRepository(api),
