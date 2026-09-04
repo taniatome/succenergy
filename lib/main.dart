@@ -7,7 +7,9 @@ import 'package:provider/single_child_widget.dart';
 
 import 'app/app.dart';
 import 'core/auth/auth_state.dart';
+import 'core/auth/biometric_service.dart';
 import 'core/auth/secure_session_store.dart';
+import 'core/auth/session_signal.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/motion/app_durations.dart';
 import 'core/network/api_client.dart';
@@ -44,13 +46,16 @@ Future<void> main() async {
   GoogleFonts.config.allowRuntimeFetching = false;
 
   final bool firebaseReady = await _startFirebase();
-  final AuthRepository auth = _authRepository(firebaseReady);
+  const SecureSessionStore store = SecureSessionStore();
+  final AuthRepository auth = _authRepository(firebaseReady, store);
 
   runApp(
     MultiProvider(
       providers: <SingleChildWidget>[
         ChangeNotifierProvider<LocaleProvider>(create: (_) => LocaleProvider()),
         Provider<AuthRepository>.value(value: auth),
+        Provider<SecureSessionStore>.value(value: store),
+        Provider<BiometricService>(create: (_) => BiometricService()),
         ChangeNotifierProvider<AuthState>(
           create: (_) => _authState(firebaseReady, auth),
         ),
@@ -88,14 +93,11 @@ Future<bool> _startFirebase() async {
   }
 }
 
-AuthRepository _authRepository(bool firebaseReady) {
+AuthRepository _authRepository(bool firebaseReady, SecureSessionStore store) {
   if (!firebaseReady) {
     return const UnavailableAuthRepository();
   }
-  return FirebaseAuthRepository(
-    api: ApiClient(),
-    store: const SecureSessionStore(),
-  );
+  return FirebaseAuthRepository(api: ApiClient(), store: store);
 }
 
 /// The splash sequence is held for its full run before the first routing
@@ -105,5 +107,9 @@ AuthState _authState(bool firebaseReady, AuthRepository auth) {
   if (!firebaseReady) {
     return AuthState.unavailable();
   }
-  return AuthState(resolver: auth, minimumHold: AppDurations.splashHold);
+  return AuthState(
+    resolver: auth,
+    signal: FirebaseSessionSignal(),
+    minimumHold: AppDurations.splashHold,
+  );
 }

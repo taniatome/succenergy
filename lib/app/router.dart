@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../core/auth/auth_state.dart';
-import '../core/motion/page_transitions.dart';
 import '../data/repositories/coach_repository.dart';
 import '../data/repositories/exercises_repository.dart';
 import '../data/repositories/goals_repository.dart';
@@ -14,12 +13,6 @@ import '../features/admin/admin_dashboard_screen.dart';
 import '../features/admin/admin_gate_screen.dart';
 import '../features/ai_coach/ai_coach_screen.dart';
 import '../features/ai_coach/coach_provider.dart';
-import '../features/auth/forgot_password_screen.dart';
-import '../features/auth/login_screen.dart';
-import '../features/auth/registration/registration_draft.dart';
-import '../features/auth/registration/step1_account_screen.dart';
-import '../features/auth/registration/step2_about_you_screen.dart';
-import '../features/auth/registration/step3_consent_screen.dart';
 import '../features/coaching_history/coaching_history_screen.dart';
 import '../features/coaching_history/session_detail_screen.dart';
 import '../features/dashboard/dashboard_provider.dart';
@@ -48,7 +41,9 @@ import '../features/subscription/subscription_screen.dart';
 import '../features/trial/trial_screen.dart';
 import '../features/trial/trial_welcome_screen.dart';
 import '../features/welcome/welcome_screen.dart';
+import 'auth_routes.dart';
 import 'launch_gate.dart';
+import 'route_builders.dart';
 import 'routes.dart';
 import 'shell_frame.dart';
 
@@ -69,92 +64,38 @@ class AppRouter {
       refreshListenable: auth,
       redirect: LaunchGate.redirect,
       routes: <RouteBase>[
-        _page(Routes.splash, (_) => const SplashScreen()),
-        _page(Routes.welcome, (_) => const WelcomeScreen()),
-        _page(Routes.language, (_) => const LanguageSelectionScreen()),
-        _page(Routes.quiz, _quiz),
-        _page(Routes.login, (_) => const LoginScreen()),
-        _registration(),
-        GoRoute(
-          path: Routes.forgotPassword,
-          pageBuilder:
-              (BuildContext context, GoRouterState state) =>
-                  AppPageTransitions.fadeThrough(
-                    // An address already typed on the sign-in screen travels
-                    // as an extra rather than in the path.
-                    child: ForgotPasswordScreen(
-                      initialEmail:
-                          state.extra is String ? state.extra! as String : '',
-                    ),
-                    state: state,
-                  ),
-        ),
-        _page(Routes.trial, (_) => const TrialScreen()),
-        _page(Routes.trialWelcome, (_) => const TrialWelcomeScreen()),
-        _page(Routes.onboarding, _onboarding),
+        AppRoute.fade(Routes.splash, (_) => const SplashScreen()),
+        AppRoute.fade(Routes.welcome, (_) => const WelcomeScreen()),
+        AppRoute.fade(Routes.language, (_) => const LanguageSelectionScreen()),
+        AppRoute.fade(Routes.quiz, _quiz),
+        ...AuthRoutes.all(),
+        AppRoute.fade(Routes.trial, (_) => const TrialScreen()),
+        AppRoute.fade(Routes.trialWelcome, (_) => const TrialWelcomeScreen()),
+        AppRoute.fade(Routes.onboarding, _onboarding),
         _shell(),
-        _page(Routes.purpose, _purpose, rise: true),
-        _page(Routes.profile, (_) => const ProfileScreen(), rise: true),
-        _page(
-          Routes.notifications,
-          (_) => const NotificationsScreen(),
-          rise: true,
-        ),
-        _page(
-          Routes.subscription,
-          (_) => const SubscriptionScreen(),
-          rise: true,
-        ),
-        _page(Routes.settings, (_) => const SettingsScreen(), rise: true),
-        _page(Routes.recharge, (_) => const RechargeScreen(), rise: true),
-        _page(Routes.help, (_) => const HelpAboutScreen(), rise: true),
-        _page(Routes.adminGate, (_) => const AdminGateScreen(), rise: true),
-        _page(
-          Routes.adminConsole,
-          (_) => const AdminDashboardScreen(),
-          rise: true,
-        ),
-        GoRoute(
-          path: Routes.coachingHistory,
-          pageBuilder:
-              (BuildContext context, GoRouterState state) =>
-                  AppPageTransitions.riseOver(
-                    child: const CoachingHistoryScreen(),
-                    state: state,
-                  ),
+        AppRoute.rise(Routes.purpose, _purpose),
+        AppRoute.rise(Routes.profile, (_) => const ProfileScreen()),
+        AppRoute.rise(Routes.notifications, (_) => const NotificationsScreen()),
+        AppRoute.rise(Routes.subscription, (_) => const SubscriptionScreen()),
+        AppRoute.rise(Routes.settings, (_) => const SettingsScreen()),
+        AppRoute.rise(Routes.recharge, (_) => const RechargeScreen()),
+        AppRoute.rise(Routes.help, (_) => const HelpAboutScreen()),
+        AppRoute.rise(Routes.adminGate, (_) => const AdminGateScreen()),
+        AppRoute.rise(Routes.adminConsole, (_) => const AdminDashboardScreen()),
+        AppRoute.rise(
+          Routes.coachingHistory,
+          (_) => const CoachingHistoryScreen(),
           routes: <RouteBase>[
-            GoRoute(
-              path: Routes.sessionDetailSegment,
-              pageBuilder:
-                  (BuildContext context, GoRouterState state) =>
-                      AppPageTransitions.riseOver(
-                        child: SessionDetailScreen(
-                          sessionId: state.pathParameters['sessionId'] ?? '',
-                        ),
-                        state: state,
-                      ),
+            AppRoute.riseWith(
+              Routes.sessionDetailSegment,
+              (BuildContext context, GoRouterState state) =>
+                  SessionDetailScreen(
+                    sessionId: state.pathParameters['sessionId'] ?? '',
+                  ),
             ),
           ],
         ),
       ],
-    );
-  }
-
-  static GoRoute _page(
-    String path,
-    Widget Function(BuildContext context) builder, {
-    bool rise = false,
-    List<RouteBase> routes = const <RouteBase>[],
-  }) {
-    return GoRoute(
-      path: path,
-      routes: routes,
-      pageBuilder: (BuildContext context, GoRouterState state) {
-        final Widget child = builder(context);
-        return rise
-            ? AppPageTransitions.riseOver(child: child, state: state)
-            : AppPageTransitions.fadeThrough(child: child, state: state);
-      },
     );
   }
 
@@ -218,39 +159,18 @@ class AppRouter {
       },
       branches: <StatefulShellBranch>[
         StatefulShellBranch(
-          routes: <RouteBase>[_page(Routes.dashboard, _dashboard)],
+          routes: <RouteBase>[AppRoute.fade(Routes.dashboard, _dashboard)],
         ),
         StatefulShellBranch(routes: <RouteBase>[_goalsBranch()]),
-        StatefulShellBranch(routes: <RouteBase>[_page(Routes.coach, _coach)]),
+        StatefulShellBranch(
+          routes: <RouteBase>[AppRoute.fade(Routes.coach, _coach)],
+        ),
         StatefulShellBranch(routes: <RouteBase>[_exercisesBranch()]),
         StatefulShellBranch(
           routes: <RouteBase>[
-            _page(Routes.progress, (_) => const ProgressScreen()),
+            AppRoute.fade(Routes.progress, (_) => const ProgressScreen()),
           ],
         ),
-      ],
-    );
-  }
-
-  /// The three registration steps, sharing one [RegistrationDraft].
-  ///
-  /// Three full screens rather than pages inside a PageView, so the system
-  /// back gesture steps back through them and each arrives on the app's own
-  /// fade-through. The draft is created once above all three and holds what
-  /// has been entered so far, which is what lets step three submit everything
-  /// in one call rather than writing a partial account at each step.
-  static ShellRoute _registration() {
-    return ShellRoute(
-      builder: (BuildContext context, GoRouterState state, Widget child) {
-        return ChangeNotifierProvider<RegistrationDraft>(
-          create: (BuildContext context) => RegistrationDraft(),
-          child: child,
-        );
-      },
-      routes: <RouteBase>[
-        _page(Routes.register, (_) => const Step1AccountScreen()),
-        _page(Routes.registerAbout, (_) => const Step2AboutYouScreen()),
-        _page(Routes.registerConsent, (_) => const Step3ConsentScreen()),
       ],
     );
   }
@@ -268,59 +188,39 @@ class AppRouter {
         );
       },
       routes: <RouteBase>[
-        GoRoute(
-          path: Routes.goals,
-          pageBuilder:
-              (BuildContext context, GoRouterState state) =>
-                  AppPageTransitions.fadeThrough(
-                    child: const GoalsScreen(),
-                    state: state,
-                  ),
-        ),
-        GoRoute(
-          path: '${Routes.goals}/${Routes.goalDetailSegment}',
-          pageBuilder:
-              (BuildContext context, GoRouterState state) =>
-                  AppPageTransitions.riseOver(
-                    child: GoalDetailScreen(
-                      goalId: state.pathParameters['goalId'] ?? '',
-                    ),
-                    state: state,
-                  ),
+        AppRoute.fade(Routes.goals, (_) => const GoalsScreen()),
+        AppRoute.riseWith(
+          '${Routes.goals}/${Routes.goalDetailSegment}',
+          (BuildContext context, GoRouterState state) =>
+              GoalDetailScreen(goalId: state.pathParameters['goalId'] ?? ''),
         ),
       ],
     );
   }
 
   static GoRoute _exercisesBranch() {
-    return GoRoute(
-      path: Routes.exercises,
-      pageBuilder:
-          (BuildContext context, GoRouterState state) =>
-              AppPageTransitions.fadeThrough(
-                child: ChangeNotifierProvider<ExercisesProvider>(
-                  create:
-                      (BuildContext context) => ExercisesProvider(
-                        context.read<ExercisesRepository>(),
-                        context.read<SubscriptionRepository>(),
-                      ),
-                  child: const ExercisesScreen(),
-                ),
-                state: state,
-              ),
+    return AppRoute.fade(
+      Routes.exercises,
+      _exercises,
       routes: <RouteBase>[
-        GoRoute(
-          path: Routes.exerciseSessionSegment,
-          pageBuilder:
-              (BuildContext context, GoRouterState state) =>
-                  AppPageTransitions.riseOver(
-                    child: ExerciseSessionScreen(
-                      exerciseId: state.pathParameters['exerciseId'] ?? '',
-                    ),
-                    state: state,
-                  ),
+        AppRoute.riseWith(
+          Routes.exerciseSessionSegment,
+          (BuildContext context, GoRouterState state) => ExerciseSessionScreen(
+            exerciseId: state.pathParameters['exerciseId'] ?? '',
+          ),
         ),
       ],
+    );
+  }
+
+  static Widget _exercises(BuildContext context) {
+    return ChangeNotifierProvider<ExercisesProvider>(
+      create:
+          (BuildContext context) => ExercisesProvider(
+            context.read<ExercisesRepository>(),
+            context.read<SubscriptionRepository>(),
+          ),
+      child: const ExercisesScreen(),
     );
   }
 }
