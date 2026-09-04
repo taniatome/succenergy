@@ -125,9 +125,9 @@ async function seedUser(uid: string): Promise<void> {
          id, email, name, preferred_language, activity, date_of_birth,
          country_code, accepted_terms, confirmed_info_true, current_principle,
          cycle_day, day_streak, tone, rhythm, reminders_enabled,
-         created_at, updated_at
+         notification_preferences, created_at, updated_at
        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                 $15, $16, $17)`,
+                 $15, $16::jsonb, $17, $18)`,
       [
         uid,
         email,
@@ -144,6 +144,16 @@ async function seedUser(uid: string): Promise<void> {
         'direct',
         'daily',
         true,
+        // The per-type switches, with re-engagement off — the mock persona
+        // had it off too, and a seed where every switch matches the master
+        // would prove nothing about the merge the PATCH does.
+        JSON.stringify({
+          'notifications.pref.goalNudges': true,
+          'notifications.pref.principleOfDay': true,
+          'notifications.pref.reengagement': false,
+          'notifications.pref.exerciseReminders': true,
+          'notifications.pref.quietHours': true,
+        }),
         daysAgo(21),
         hoursAgo(3),
       ],
@@ -759,6 +769,36 @@ async function seed(): Promise<void> {
       '',
     ].join('\n'),
   );
+
+  noteLibrarySource(counts.exercises ?? 0);
+}
+
+/**
+ * Says where the exercise library comes from.
+ *
+ * It starts empty in production — the content is the client's, entered
+ * through the admin console — so a developer who has only ever seen the
+ * seeded database should know the rows in front of them are a local fixture
+ * and not a shipped library.
+ */
+function noteLibrarySource(exercises: number): void {
+  const lines =
+    exercises === 0
+      ? [
+          'The exercise library is empty.',
+          'That is the production starting state: content is entered through',
+          'the admin console at /v1/admin/exercises. The app shows its empty',
+          'state rather than failing.',
+        ]
+      : [
+          `The exercise library holds ${String(exercises)} seeded exercises.`,
+          'These are a local fixture. In production the table starts empty',
+          'and is filled through the admin console at /v1/admin/exercises.',
+        ];
+
+  for (const line of [...lines, '']) {
+    console.log(line);
+  }
 }
 
 try {
