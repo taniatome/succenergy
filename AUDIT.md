@@ -2027,3 +2027,119 @@ subscription mapper reached into row shapes from a service. Resolved by mapping
 the document the repository already returns. Nothing else in the existing
 codebase broke the layer rule — the boundaries the earlier passes drew held
 under seven new feature areas without needing a shortcut.
+
+# Endpoints + Repository Swap — Runtime Verification
+
+The pass above was written and committed without a database or a device
+attached, so its verify list was recorded as unexecuted. This section is that
+list actually run: local backend on the dev Supabase, Auth emulator, seeded
+persona. Everything below is an observed result, not a reading of the code.
+
+## What the run found
+
+Three defects, each committed with its fix.
+
+**The pending migration was never applied.** `20260904090000_notification_
+preferences` was written last pass and left unapplied, so
+`notification_preferences` did not exist on the dev database. Applied with
+`npm run migrate`. `GET /v1/me/notification-preferences` returns the five
+switches; the PATCH persists them.
+
+**The seed could not be re-run.** `npm run seed` failed with a duplicate key
+on `goals_pkey`. The persona's row ids are fixed strings — `goal-relaunch`,
+`ms-relaunch-1` — which makes them global primary keys, while the cleanup was
+`delete from users where id = $1`, scoped to the uid. The uid is only stable
+while the Auth emulator keeps its accounts, and it is started without an
+import/export directory: a restart empties it, `resolveUid` stops finding the
+persona and mints a new uid, the delete then clears nothing and the insert
+collides with the previous run's rows. The transaction rolled back, so the
+symptom was a seed that always failed and never explained why. Now matched on
+the email as well, which is what the persona is actually keyed to.
+
+**An undated milestone came back as 1 January 1970.** `milestones.due_date` is
+nullable and `createMilestoneSchema` marks `dueDate` optional, so an undated
+checkpoint is a shape the API accepts — but `toMilestoneEntry` substituted
+`new Date(0)` to satisfy a non-nullable `MilestoneEntry.dueDate`. A date
+nobody entered reached the client, indistinguishable from a real one. Made
+nullable through the model, the row mapper and the result mapper. No client
+change was needed: Dart's `Json.date` already falls back to now for an absent
+value, which is what an undated checkpoint means. The comment above the mapper
+also described behaviour ("given its creation date") that the code never had.
+
+## The verify list, item by item
+
+| # | Item | Result |
+|---|------|--------|
+| 1 | build / lint / typecheck | clean |
+| 2 | `GET /v1/me` returns subscription | present; see note below |
+| 3 | `/v1/health/ready` checks Postgres | `{"database":{"status":"ok"}}`, 200 |
+| 4 | Goals create→get→update→complete→delete, cascade | all pass; cascade confirmed in SQL |
+| 5 | Exercises library + reflection persisted | 2 exercises with steps; reflection round-trips |
+| 6 | Progress moves with real data | `goalCompletion` 0 → 0.5 → 0 on complete/reopen |
+| 7 | Sessions start→message→end | transcript readable; list carries no messages |
+| 8 | Admin requires the claim | 403 with a valid non-admin token, 401 with none, 200 with the claim |
+| 9 | No SQL built by concatenation | verified by reading and by probe |
+| 10 | No credentials in code | none tracked |
+| 11 | `flutter analyze` | clean |
+| 12–16 | On device against the local backend | **not run** — see below |
+| 17 | No widget file touched by a swap | none |
+
+**On item 2.** Registration creates a subscription row, so a new account
+returns `tier: "trial", status: "none"` rather than `null`. The launch gate's
+requirement is met either way — the key is always present, so "no
+subscription" is distinguishable from "not fetched" — but the value is a
+trial row, not the `null` the pass instruction predicted.
+
+**On item 4.** Ownership was tested with a second account rather than by
+reading the queries: every milestone and action route returned 404 to a user
+who did not own the goal — 404 rather than 403, which is right, since 403
+would confirm the row exists. Unauthenticated is 401. `targetDate` in the past
+and an unknown principle are both 422.
+
+**On item 5.** The submit was sent with `principle` set and a
+`suggestedAction` the client invented. The principle was rejected by the
+strict schema (422), and on a valid submit the stored `suggestedAction` came
+from the library row, not the request. Both hold.
+
+**On item 9.** The only dynamic SQL is `buildPatch`, and it is safe for a
+reason worth stating: it iterates the keys of the **allow-list**, not the
+keys of the caller's patch, so a field named in a request body cannot reach
+the statement even if validation let it through. Values are always `$n`. The
+other interpolations are module-level column lists. Probed as well as read: a
+title of `x'); drop table goals; --` was stored as text, a patch naming
+`user_id` was refused 422, and the tables were intact afterwards.
+
+## Item 12–16: what was done instead
+
+No Android or iOS device or emulator is attached to this machine — `flutter
+devices` offers Windows and web only — so the screens were not driven by hand
+against the backend.
+
+Rather than record that as a gap and stop, the risk those checks exist to
+catch was covered another way. A repository swap does not usually fail by
+sending a broken request; it fails when the mapper and the wire format
+disagree about a field. `flutter analyze` cannot see that, and neither can a
+mock-backed widget test, because the mock was written from the same assumption
+as the mapper — the two agree with each other and can both be wrong about the
+server.
+
+So `test/api_contract_test.dart` runs the real mappers over responses captured
+byte for byte from the live backend, held in `test/fixtures/`. Eight tests:
+the profile and its subscription key, goals with milestones and actions and
+the denormalised `goalId`, the library with its steps, the reflection coming
+back under its reserved step id, progress as derived numbers with every
+principle keyed, notifications and preferences, sessions, purpose answers.
+All pass, and they fail in CI if a field is renamed or starts arriving null.
+
+What this still does not cover, and what a device pass is owed: the screens
+rendering that data, navigation, and per-screen error rendering — the
+providers hold a typed failure and stop loading, but a failure still degrades
+to `EmptyState` rather than saying what went wrong. That remains the open item
+from the previous section and is unchanged by this run.
+
+## Unchanged
+
+The AI Coach's reply is still `coach_reply_stub.dart`; the subscription
+repository is still mock pending RevenueCat. Claude, RAG, embeddings, FCM,
+Stripe and any Cloud Run deploy remain out of scope, and nothing here was
+deployed.
