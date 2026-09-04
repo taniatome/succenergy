@@ -11,6 +11,7 @@ import {
 } from './notification.routes.js';
 import { progressRouter } from './progress.routes.js';
 import { purposeRouter } from './purpose.routes.js';
+import { sessionRouter } from './session.routes.js';
 import { healthRouter } from './health.routes.js';
 import { userRouter } from './user.routes.js';
 
@@ -36,4 +37,5 @@ apiRouter.use('/me/purpose', purposeRouter);
 apiRouter.use('/me/progress', progressRouter);
 apiRouter.use('/me/notifications', notificationRouter);
 apiRouter.use('/me/notification-preferences', notificationPreferenceRouter);
+apiRouter.use('/me/sessions', sessionRouter);
 apiRouter.use('/me', userRouter);
