@@ -68,18 +68,21 @@ export const ACTION_COLUMNS_A = `
   a.id, a.goal_id, a.title, a.is_done, a.is_today, a.position`;
 
 /**
- * A goal with no target date reads as due now.
+ * A milestone with no due date is carried through as null.
  *
- * The column is nullable because the database does not insist on a plan
- * having a deadline, but the Dart model's `targetDate` is not — so a row
- * without one is given its creation date rather than forcing every screen to
- * handle a null it will never see in practice.
+ * `milestones.due_date` is nullable and the create endpoint marks it optional,
+ * so a checkpoint without a deadline is a shape the API allows. It used to be
+ * substituted with `new Date(0)` to satisfy a non-nullable model, which put a
+ * date of 1 January 1970 on the goal timeline — a value nobody entered, read
+ * by the client as real. Null says the thing that is true, and the Dart reader
+ * already falls back to now for an absent date, which is what an undated
+ * checkpoint means.
  */
 export function toMilestoneEntry(row: MilestoneRow): MilestoneEntry {
   return {
     id: row.id,
     title: localizedOwn(row.title),
-    dueDate: fromDateColumn(row.due_date) ?? new Date(0),
+    dueDate: fromDateColumn(row.due_date),
     reachedAt: row.reached_at,
   };
 }

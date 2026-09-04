@@ -18,7 +18,7 @@ export function toMilestoneResult(milestone: MilestoneEntry): MilestoneResult {
   return {
     id: milestone.id,
     title: milestone.title,
-    dueDate: milestone.dueDate.toISOString(),
+    dueDate: toIso(milestone.dueDate),
     reachedAt: toIso(milestone.reachedAt),
     isReached: milestone.reachedAt !== null,
   };

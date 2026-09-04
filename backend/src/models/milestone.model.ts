@@ -10,7 +10,9 @@ import type { LocalizedText } from './localized_text.model.js';
 export interface MilestoneEntry {
   id: string;
   title: LocalizedText;
-  dueDate: Date;
+
+  /** Null when the checkpoint carries no deadline — the column is nullable. */
+  dueDate: Date | null;
 
   /** Null while the milestone is still ahead of the user. */
   reachedAt: Date | null;
@@ -19,7 +21,7 @@ export interface MilestoneEntry {
 export interface MilestoneResult {
   id: string;
   title: LocalizedText;
-  dueDate: string;
+  dueDate: string | null;
   reachedAt: string | null;
 
   /** Derived, mirroring Dart `Milestone.isReached`. */
