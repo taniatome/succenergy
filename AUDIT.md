@@ -1581,3 +1581,449 @@ Everything from the previous pass re-run after the move.
 3. **Still not deployed**, and the live service still runs the Firestore
    build. Unchanged from the previous pass; same missing `gcloud` and Docker
    daemon.
+
+---
+
+# CLIENT FEEDBACK ROUND 2
+
+**Date:** 2026-09-04
+**Scope:** the ten items in the round-2 revision brief. Frontend only, still on mock data. No backend, no API calls, no payment SDK, no audio.
+**State:** `flutter analyze` clean. `flutter test` 7/7 green. EN and PT key sets identical at 468 keys each.
+
+**The decision this pass turns on:** the seven-day trial now opens the **Purpose** exercises alone. The other six principles are what a monthly subscription opens. That is what makes the client's two remarks — "Locked and Included are Inversed" and "Exercise Library Free Trial only one Purpose" — describe the same defect, and it is what the rest of item 1 and all of item 2 follow from.
+
+---
+
+## Part 1 — What changed, file by file
+
+### Item 1 — Subscription: the locked / included inversion
+
+Two separate faults, both real.
+
+**Fault A — the tier was read from a seed, not from the account.** `MockSubscriptionRepository` initialised `_tier` from `MockData.user.tier`, which is `professional`. So an account that had just registered and taken the trial opened Plans and was told its current plan was Professional at $33 a month, while the Student card beside it carried "YOUR TIER". Settings showed the same wrong plan.
+
+**Fault B — the two columns held each other's values.** Every plan shared `includedFeatureValueKeys`, so the trial was described as including all seven principles, while the limited values ("Purpose and Passion", "Five messages a week") sat in a `lockedFeatureValueKeys` column describing a pre-trial state the router's paywall makes unreachable. Under the trial scope above, the limited exercise value is what the trial **includes** and the full value is what stays **locked** — exactly the client's sentence, "the description of Locked is where Included needs to be".
+
+| File | Change |
+|---|---|
+| [mock_subscription_repository.dart](lib/data/mock/repositories/mock_subscription_repository.dart) | Takes the `AuthRepository`. `loadCurrentTier()` returns the account's own tier, falling back to a plan chosen on the Plans screen. No seed |
+| [subscription_repository.dart](lib/data/repositories/subscription_repository.dart) | Added a synchronous `currentTier` getter, for the library, which has to decide on every build |
+| [subscription_plan.dart](lib/data/models/subscription_plan.dart) | New `SubscriptionEntitlements` extension: `opensWholeLibrary` and `opens(Principle)`. The one place the trial's scope is written down |
+| [mock_data.dart](lib/data/mock/mock_data.dart) | `lockedFeatureValueKeys` replaced by `trialFeatureValueKeys`. The trial plan points at it; both monthly plans keep `includedFeatureValueKeys` |
+| [feature_comparison_table.dart](lib/features/subscription/widgets/feature_comparison_table.dart) | Rewritten, tier-aware. INCLUDED comes first and gold, holding what the tier the user is on actually gives. LOCKED comes second and holds only what differs. On either monthly rate nothing differs, so the table collapses to one column rather than printing an empty one |
+| [subscription_screen.dart](lib/features/subscription/subscription_screen.dart) | Passes the current tier and both value maps; holds the loader until the tier has arrived |
+| [main.dart](lib/main.dart), [test/](test/) | Repository construction updated for the new signature |
+
+Walked on all three tiers and rendered to PNG:
+
+| Tier | Card marked current | Table title | Exercise library row |
+|---|---|---|---|
+| 7-day trial | 7-day trial, "YOUR PLAN" | What a subscription opens | Included: **Purpose only** · Locked: All seven principles |
+| Student \| Minorities | Student, "YOUR TIER" | Included in your plan | Included: All seven principles |
+| Professional | Professional, "YOUR TIER" | Included in your plan | Included: All seven principles |
+
+### Item 2 — Free-tier exercise library scope
+
+Gating, not hiding. Every exercise still loads and still renders; the locked ones say so and go to Plans instead of into a session.
+
+| File | Change |
+|---|---|
+| [exercises_provider.dart](lib/features/exercises/exercises_provider.dart) | Takes the `SubscriptionRepository`. `isUnlocked(Principle)` and `hasLockedPrinciples` read the tier on every call, so a plan chosen on Plans takes effect on the way back |
+| [exercise_card.dart](lib/features/exercises/widgets/exercise_card.dart) | New `isLocked`. Title drops to secondary, the duration is replaced by a lock and "Locked", and the footer reads "Open with a subscription" in gold |
+| [principle_selector.dart](lib/features/exercises/widgets/principle_selector.dart) | Locked principles keep their pill and carry a small lock glyph. The row still teaches the whole seven-principle sequence |
+| [exercises_screen.dart](lib/features/exercises/exercises_screen.dart) | Passes the locked state; a tap on a locked card pushes Plans and refreshes on return. The header line becomes "Your trial opens Purpose. A subscription opens the other six principles." while anything is locked |
+| [router.dart](lib/app/router.dart) | `ExercisesProvider` now gets the subscription repository |
+
+### Item 3 — Trial billing copy
+
+The client's sentence verbatim, with the rate from the activity chosen at registration. `trial.smallPrint` is gone.
+
+| File | Change |
+|---|---|
+| [app_strings.dart](lib/core/localization/app_strings.dart) | New `trial.billing.student` and `trial.billing.professional`, EN and PT. `{price}` is still substituted from `AppConstants`, so the figure lives in one place |
+| [trial_screen.dart](lib/features/trial/trial_screen.dart) | Picks the key from the activity. Left-aligned rather than centred: it is now a paragraph, not a one-line note |
+
+### Item 4 — Onboarding intro copy
+
+`auth.register.subtitle` was "Seven questions and your coach will know how to work with you." It is now the client's exact line, in both languages. No structural change: seven is still three before registration and four after. **See the naming flag in Part 3.**
+
+### Item 5 — Email placeholder and persona leakage
+
+The email hint was already `taniatome@succenergy.com` — the brief's description of it as `marisa.chissano@lumeconsult.co.mz` was out of date. The **name** hint was `Tânia Tomé`, which is still a persona name, so it is now neutral: "Your full name" / "O seu nome completo".
+
+Grepped `lib/`, `ios/` and `android/` for the old persona: the only remaining occurrences are in [mock_data.dart](lib/data/mock/mock_data.dart), which is seeded demo data rendering on Profile and the Dashboard as intended. No widget holds a hardcoded persona value. **See Part 3** — this is almost certainly what the client is reading as "the account".
+
+### Item 6 — Privacy Policy, and no dead callbacks
+
+| File | Change |
+|---|---|
+| [app_constants.dart](lib/core/constants/app_constants.dart) | `placeholderTermsUrl` and `placeholderPrivacyUrl`, in the existing placeholder block. **Neither is a confirmed destination** |
+| [settings_screen.dart](lib/features/settings/settings_screen.dart) | Terms and conditions, then Privacy policy, in the About group beside Help and about. Both open through `ExternalLinks` and are marked "Opens in your browser" |
+| [help_about_screen.dart](lib/features/help_about/help_about_screen.dart) | The two `onPressed: () {}` links now open the same two constants |
+
+`grep -rn "() {}" lib/` returns only `setState(() {})` rebuild triggers. No dead callback remains anywhere in the app.
+
+### Item 7 — App name on the home screen
+
+`android:label` and `CFBundleDisplayName` are both **`Succenergy`**. See Part 3 for why this is not the two-line name the client asked for.
+
+### Item 8 — Welcome screen space background
+
+[earth_glow_painter.dart](lib/features/welcome/widgets/earth_glow_painter.dart) rewritten against [welcome_screen_reference.png](assets/design_reference/welcome_screen_reference.png), with the bloom extracted to [horizon_bloom.dart](lib/features/welcome/widgets/horizon_bloom.dart) to keep both files short.
+
+What was wrong, and what replaced it:
+
+| Was | Now |
+|---|---|
+| The body's radial gradient ran *lighter* deep inside and darkest at the rim, so only a 10%-of-radius sliver was ever visible — a band, not a sphere | Body filled near-black, then lit by two passes clipped inside the circle and centred on one point on the rim. It falls to black as it turns away |
+| Two `drawArc` haze passes at flat alpha across the whole upper semicircle — glow spread evenly along the arc | A `SweepGradient` rim shader concentrating at the light. The halo passes fall away fast; the hard 1.8px line keeps a floor of 0.30 so the edge stays legible to both frame edges |
+| Nothing above the horizon but stars | A wide, low haze pass centred on the light, painted before the body |
+| A symmetric two-circle flare at the apex | One bloom: an asymmetric blue spill scaled 1.45 × 0.68 and pushed past the light, a tight off-white core, a pinpoint, and four rays — the long one along the rim, a shaft up, two shorter diagonals |
+| 90 evenly scattered gold points | 16 deterministic clusters of 9, fading as they approach the rim where the atmosphere would wash them out |
+
+The light sits **on** the curve, not above it: `_lightOn()` solves for the point on the circle at the drifted x, which is what stops the bloom reading as a lamp hung over the horizon. Drift holds at 0 under reduced motion, leaving the light on the peak and still.
+
+`StarfieldPainter` was **not** changed — 110 deterministic points, every ninth brighter, no twinkling, already what the brief asks for.
+
+Rendered to PNG at 390×844 and 360×720 and inspected; the tuning above was driven by those renders, not by reading the code.
+
+### Item 9 — Transparent wordmark
+
+| File | Change |
+|---|---|
+| `assets/branding/succenergy_logo_wordmark_transparent.png` | Added. 3375×804 RGBA; verified by decoding the IDAT — background alpha 0, glow preserved as semi-transparent pixels |
+| `assets/branding/succenergy_logo_wordmark.png` | **Deleted.** Nothing referenced it |
+| [asset_paths.dart](lib/core/constants/asset_paths.dart) | Points at the transparent file. Still the only path constant for the lockup |
+| [succenergy_wordmark.dart](lib/core/widgets/branding/succenergy_wordmark.dart) | **`fullBleed` removed.** The widget is now a plain width-sized image, default 260 — measured to clear the horizontal screen padding at the 360px minimum layout. Still the only file referencing the asset |
+| [welcome_screen.dart](lib/features/welcome/welcome_screen.dart), [splash_screen.dart](lib/features/splash/splash_screen.dart), [help_about_screen.dart](lib/features/help_about/help_about_screen.dart) | Call sites updated. Help/About centres it at 220; the other two take the default |
+
+A first attempt clamped the width with a `LayoutBuilder`, which threw `LayoutBuilder does not support returning intrinsic dimensions` inside the Welcome screen's `SliverFillRemaining`. Replaced with a plain `SizedBox`; the default width already fits the narrowest supported layout.
+
+Confirmed by render on Welcome and Help/About: no panel, no seam.
+
+### Item 10 — App icon
+
+`flutter_launcher_icons` was already configured against `assets/branding/succenergy_app_icon.png` with `#0A1628` as the adaptive background. Re-ran `dart run flutter_launcher_icons` and verified the output:
+
+- Five Android mipmaps, five `drawable-*/ic_launcher_foreground.png`, `mipmap-anydpi-v26/ic_launcher.xml` with a 16% inset, and `values/colors.xml`.
+- 22 files in `ios/Runner/Assets.xcassets/AppIcon.appiconset/`, including `Icon-App-1024x1024@1x.png`, with `remove_alpha_ios: true`.
+- All regenerated byte-identically to what was committed — the "S" symbol was already correctly installed on both platforms. `git status` reports no change to any icon file, which is the proof rather than the absence of one.
+
+See Part 3 for why this is the symbol alone rather than the two-line icon the client asked for.
+
+---
+
+## Part 2 — Verification
+
+| # | Check | Result |
+|---|---|---|
+| 1 | `flutter analyze` | **Clean.** No issues found |
+| 2 | Subscription screen on every tier | **Yes** — walked and rendered on trial, Student and Professional; the table above records what each reads |
+| 3 | Trial tier: Purpose available, six locked | **Yes** — rendered. Purpose cards open; Passion onward carry the lock, "Open with a subscription", and lock glyphs on their pills. On a monthly tier the whole library opens and the locks are gone |
+| 4 | Trial screen rate and copy, both registration types | **Yes** — rendered both. Professional shows $33 and the Professional sentence; Student shows $11 and the Students & Minorities sentence, and only that rate |
+| 5 | No old persona in any field hint | **Yes** — `grep` over `lib/`, `ios/`, `android/`. Remaining hits are seeded mock data only |
+| 6 | Privacy Policy in Settings; no dead callbacks | **Yes** — rendered. `grep -rn "() {}" lib/` returns only `setState` rebuilds |
+| 7 | Launcher name and icon | **Yes** — `android:label="Succenergy"`, `CFBundleDisplayName` `Succenergy`; icon set regenerated and verified on both platforms |
+| 8 | Welcome background reads as a lit planet | **Yes** — rendered at two sizes and inspected |
+| 9 | Wordmark shows no panel; `fullBleed` gone; old PNG removed | **Yes** — rendered on Welcome and Help/About. `grep` finds no `fullBleed` and no reference to the old file; only `succenergy_wordmark.dart` names the asset |
+| 10 | EN and PT key sets identical | **Yes** — 468 keys each, no key in one map and not the other, no duplicates |
+| 11 | No new hex literals, `Colors.*`, emojis or non-glow shadows | **Yes** — over every touched file: no `0x`-literal colours, no bare `Colors.`, no `BoxShadow(`, no pictographs |
+| 12 | No touched file over 250 lines, no `build()` over 60 | **Yes** — largest touched file is `settings_screen.dart` at 244; `earth_glow_painter.dart` 242, `horizon_bloom.dart` 120. Longest touched `build()` is 41 |
+| — | `flutter test` | **7/7 green.** Two harnesses updated for the repository signature |
+
+Two things still exceed the limits, **both untouched by this pass and both from the first commit**: `app_bottom_nav.dart` at 542 lines, and 71-line `build()` methods in `onboarding_summary.dart` and `admin_gate_screen.dart`. The earlier audit's claim that no `build()` exceeds 60 was too generous. Not fixed here — outside this round's scope, and worth a separate pass.
+
+---
+
+## Part 3 — Deviations, and the item still needing the client's decision
+
+### 1. The coach name — this one needs the client to settle it
+
+The copy in item 4 says **"AI Succenergy Coach"**. The client's locked system prompt says the coach is **"Succenergy AI Coach"** and states it must not deviate. Same words, different order.
+
+The client's wording is used exactly as given, in item 3's billing sentence and item 4's registration subtitle, in both languages. But the app is now inconsistent with itself: `common.appName`, the Help/About body, the FAQ and the pubspec description all say "Succenergy AI Coach", and the store listing will too. One of the two has to give. Nothing has been guessed either way.
+
+Where the name appears, for whoever settles it: the system prompt, the two copy strings changed this pass, `common.appName`, `help.about.body`, the `pubspec.yaml` description, and the eventual store listing.
+
+### 2. The launcher name is `Succenergy`, not two lines
+
+The client asked for "Succenergy" with "AI COACH" above it. Neither iOS nor Android supports a multi-line launcher label — both render one line and truncate at roughly 11–12 characters, so "Succenergy AI Coach" would show as "Succenergy A…". `Succenergy` is 10 characters, fits whole, and reads as the brand.
+
+### 3. The app icon is the "S" symbol, not two lines of text
+
+Three reasons: at actual home-screen size (~60×60pt) two lines of text are illegible, and Apple's Human Interface Guidelines advise against text in icons for that reason; the app name already appears beneath the icon, so text in the icon repeats it; and producing a new two-line icon would mean creating brand artwork, which the agreement reserves to the client's designer.
+
+### 4. The transparent wordmark is correct for the app, not for print
+
+It is a format conversion of the client's own asset — same shapes, same colours, background alpha derived from luminance so the glow survives as semi-transparent pixels rather than being clipped by a hard threshold. It composites correctly on any dark surface. It is **not** a substitute for a designer-produced transparent master: the lettering is additive light on near-black and will wash out on a white page. **The client should still ask her designer for a marketing-grade transparent version.**
+
+### 5. The symbol above the wordmark still has a panel — and it is not the wordmark's
+
+Worth flagging, because it may be part of what the client saw. On Welcome, Splash and Help/About, `SuccenergyLogo` renders `assets/branding/succenergy_app_icon.svg`, which has a **rounded-rectangle navy panel with a gold border baked into the artwork** — correct for an app icon, but on those screens it reads as a visible rectangle around the "S". The approved reference artwork shows the "S" free-standing with no panel.
+
+This was not touched: it is brand artwork, and removing the panel means a panel-free "S" from the client's designer, not an edit here. If the "blue rectangle" the client reported was this rather than the wordmark, that is the asset to ask for.
+
+### 6. The scope is enforced at the trial, because there is no browsable free tier
+
+The brief describes the restriction as applying to a "free tier". The router's paywall ([subscription_gate.dart](lib/app/subscription_gate.dart), unchanged) sends any signed-in account without the trial flag straight to the paywall, so a genuinely free account can never reach the library. Implementing the scope there would have shipped code nothing could ever run.
+
+It is enforced on the **trial** instead, per the client's own words ("Exercise Library Free Trial only one Purpose"), which is both reachable and observable. If the client actually wants a browsable free tier below the trial, that is a router change and a fourth tier, and it should be asked for explicitly.
+
+### 7. The trial is limited in the library only
+
+The client named the exercise library and nothing else. The trial therefore still opens the coach without a message limit, full coach memory, unlimited goals, adaptive personalisation and full analytics — the comparison table prints those under INCLUDED with nothing beside them under LOCKED. If she intends the trial to be limited on other dimensions too, the maps are one place: `trialFeatureValueKeys` in [mock_data.dart](lib/data/mock/mock_data.dart).
+
+### 8. `trial.unlock.exercises` was rewritten
+
+It said "Every exercise across the seven principles", which is no longer true. It now says "The Purpose exercises, to open the cycle" / "Os exercícios de Purpose, para abrir o ciclo". `trial.subtitle` lost its claim that the exercises open with the trial, for the same reason.
+
+---
+
+# Endpoints + Repository Swap Pass
+
+The backend gained endpoints for every remaining feature, and five of the six
+mock repositories in the app were replaced with clients for them. The AI
+Coach's reply generation is the one thing still running on the device, and it
+is isolated in a single file for the Claude pass to delete.
+
+## Part 1 — What changed
+
+### Backend
+
+Every feature area got its own router, controller, service and repository. The
+layer rule held throughout: no SQL above a repository, no Express type below a
+controller, no `pg` import outside `repositories/`, and every value in every
+statement is an `$n` placeholder.
+
+| Area | Routes | Notes |
+| --- | --- | --- |
+| Goals | 15 under `/v1/me/goals` | Goal, milestones, action plan |
+| Exercises | 2 under `/v1/exercises`, 3 under `/v1/me/exercise-responses` | Library shared, answers per-user |
+| Purpose | 2 under `/v1/me/purpose` | Upsert per prompt |
+| Progress | 2 under `/v1/me/progress` | Everything derived |
+| Notifications | 4 inbox, 2 preferences | |
+| Sessions | 6 under `/v1/me/sessions` | Data layer for the AI pass |
+| Admin | 10 under `/v1/admin` | Behind `requireAdmin` |
+
+Three rules were applied everywhere and are worth stating once:
+
+**Ownership is never inferred from a path parameter.** Every statement carries
+the uid from the verified token alongside the id from the URL. `milestones`,
+`action_items` and `chat_messages` have no `user_id` of their own, so those
+writes prove ownership with an `exists` against their parent. A guessed id
+matches no row and 404s — and a resource that belongs to someone else and one
+that does not exist give the same answer on purpose, because the difference
+would confirm that an id is real.
+
+**A dynamic SET clause is built in exactly one place.** `patch_builder.ts`
+takes an allow-list of field-to-column names and returns a clause of `$n`
+placeholders. A field a client invents cannot reach the SQL because it is not
+a key of the map.
+
+**What the client says about itself is not trusted where the database already
+knows.** The principle an exercise response is filed under and the action it
+captured are read from the exercise row, not the request. A progress snapshot's
+figures are counted server-side and its date comes from `current_date`. A
+session's principle comes from the profile.
+
+### Flutter
+
+| Repository | Backing | Widget files touched |
+| --- | --- | --- |
+| `GoalsRepository` | `/v1/me/goals` | none |
+| `ExercisesRepository` | `/v1/exercises`, `/v1/me/exercise-responses` | none |
+| `UserRepository` (incl. Purpose) | `/v1/me`, `/v1/me/purpose`, `/v1/admin/*` | none |
+| `ProgressRepository` | `/v1/me/progress` | none |
+| `NotificationsRepository` | `/v1/me/notifications` | none |
+| `CoachRepository` | `/v1/me/sessions` | none |
+
+**No widget file was modified by any swap.** The interfaces were already the
+right shape, which is the thing that was being tested.
+
+## Part 2 — Findings
+
+### 1. The prompt's fix for the subscription mapper would have been a layer violation
+
+The instruction was to read `row.sub_tier`, `row.sub_status` and the rest in
+`user.service.ts`. A service cannot see rows — that is the layer rule this same
+pass insists on, and the repository was already returning a mapped
+`SubscriptionDocument` that the service's response mapper was dropping on the
+floor. The fix maps that document instead. Same result, no inversion.
+
+`isActive` is derived in the service from the same rule the API uses
+everywhere, so the app never has to know which statuses count as open. It is
+explicitly `null` when an account has none, never an omitted key, because the
+launch gate has to tell "no subscription" from "not fetched".
+
+### 2. The health check needed no work
+
+`/v1/health/ready` already round-trips `select 1` through
+`checkDatabaseConnectivity`. Nothing in `src/` mentions Firestore except
+comments recording that it is gone.
+
+### 3. Poppins is the app's type system, not something the auth pass introduced
+
+The instruction assumed the auth pass had broken type consistency by
+introducing Poppins where the rest of the app uses Exo 2 and Orbitron. It had
+not. `grep -r Poppins lib/` returns two files: `app_typography.dart`, which is
+the single source of type for every screen, and one comment in `main.dart`.
+Both predate the auth work — they are in the **first commit** — and the five
+bundled font files in `assets/google_fonts/` are Poppins.
+
+`app_typography.dart` also records the decision explicitly: Orbitron was
+*replaced*, and the letterspaced-caps register that used to be Orbitron is now
+Poppins held apart by tracking and weight.
+
+Every auth screen resolves its type through `AppTypography`, so they already
+use exactly the same system as the rest of the app. **No change was made.**
+Switching to Exo 2 and Orbitron would not be fixing an inconsistency in the
+auth screens — it would be a brand change across all twenty-odd screens,
+needing new font files and reversing a documented decision. If the client does
+want that, it is its own pass and it should be asked for as one.
+
+### 4. Five notification switches, two columns — a migration was added
+
+The Notifications screen shows five switches keyed by localisation key. The
+user row had `reminders_enabled`, a master switch, and `rhythm`. Neither can
+hold five independent booleans, so four of the five would have moved and
+forgotten — worse than not offering them, because a person who turns
+re-engagement off and finds it on next launch has been lied to by the
+interface.
+
+`supabase/migrations/20260904090000_notification_preferences.sql` adds
+`users.notification_preferences jsonb not null default '{}'`. jsonb rather than
+five columns because the set is product copy, not schema: adding a
+notification type should be a change to the localisation table and the switch
+list, not a migration, and the keys are never queried individually.
+
+The two profile fields still go through the user service's own patch, as
+instructed — one place owns a profile column. Only the map is written by the
+notification service, and it is merged with `||` rather than replaced, so a
+client that renders three of the five switches cannot clear the two it has
+never heard of.
+
+### 5. There is no `PurposeRepository` in the app
+
+The swap list named one. The Purpose prompts live on `UserRepository`, beside
+the profile, because they are answers *about* the person rather than a feature
+with a repository of its own. The unit that had to be swapped was therefore
+that whole interface, which is what the commit did — profile, assessment,
+Purpose answers and the two console reads together.
+
+### 6. Two files were already over the 250-line limit
+
+`user.repository.ts` (617) and `user.service.ts` (357) both broke the rule
+before this pass and both had to be touched, so they were split along the seams
+they already had: onboarding and account deletion into their own service and
+repository, row shapes and column lists into `user_rows.ts`, the repository's
+public shapes into `user_contracts.ts`, and the date, locale and count
+conversions every new repository needed into `row_mappers.ts`. Nothing in
+`backend/src/` is over 250 lines now.
+
+`lib/app/router.dart` was in the same position on the Flutter side and was
+split into `route_builders.ts` and `auth_routes.dart` during the auth pass's
+verification.
+
+### 7. The Dart models had no JSON layer
+
+Nothing under `lib/data/models/` had `fromJson`. Rather than adding wire
+concerns to the models, the mapping lives in `lib/data/implementations/*_mapper.dart`
+beside the repositories that use it, following the precedent
+`user_profile_mapper.dart` set in the auth pass. `Json` in `json_reader.dart`
+is the only place in the app that knows the wire is JSON.
+
+A field that is missing, null or the wrong type takes a defined fallback rather
+than throwing. An app that will not open because one optional string arrived as
+a number is worse than one showing an empty title.
+
+### 8. The Dart and API shapes disagree in three places, resolved in the mappers
+
+- **Exercise responses.** The API stores one row per completed run with the
+  answers as a map; the Dart model is one `ExerciseResponse` per step. A read
+  fans a session out, a submission collapses it back.
+- **Derived goal fields.** The API sends `status`, `isCompleted`, `progress`
+  and `actionsDone`; the Dart model computes all four. The mapper ignores the
+  wire values, because two sources would be two answers that can disagree.
+- **Exercise completion.** `Exercise.completedAt` is per-account and the
+  library is shared, so it is merged in from the caller's own responses.
+
+### 9. The reflection bug is fixed at the only level that could fix it
+
+The mock collected the closing reflection and discarded it. It now has its own
+column, out of `step_responses` because it is not one of the exercise's
+declared steps, and the backend is the record of it. The mapper lifts it out of
+the per-step list on submit and puts it back under the reserved step id on
+read.
+
+### 10. Progress has no constants left
+
+Every figure is a count or an average over the rows that produced it. Two
+choices worth naming: cycle completion is *distinct principles practised* over
+seven, not exercises completed — ten exercises on Praxis is one principle
+closed, and counting responses would have shown the cycle finished twice over
+without the person leaving it. And the principle breakdown returns all seven
+including zeros, so the chart draws seven bars without the client filling gaps
+and the two disagreeing about what no practice looks like.
+
+### 11. Providers had no error state, which a live backend makes a hang
+
+Before this pass an exception from a provider's `load()` became an unhandled
+async error with no screen attached: the loader would spin forever. `RequestGuard`
+holds the loading flag and the failure and clears the flag in a `finally`, so a
+provider cannot forget it. `RequestFailure` classifies whatever was thrown into
+four cases with a localisation key each, so no widget branches on an exception
+type and no message the server wrote is ever shown.
+
+## Part 3 — What was skipped, and what is left
+
+### Not done, and flagged rather than half-done
+
+**Per-screen error rendering.** The providers now hold a typed failure and stop
+loading, so nothing hangs and nothing crashes — but the screens read `loading`
+and fall back to their existing `EmptyState`, which means a failure currently
+degrades to "there is nothing here" rather than saying what went wrong.
+Rendering `failure.messageKey` with the retry, per screen, is the next piece
+and it is the one part of Part 4 that necessarily touches widget files.
+
+**Every runtime verification step.** Nothing in the verify list that needs a
+running backend was executed. `npm run build`, `npm run lint`, `npm run
+typecheck` and `flutter analyze` are clean and the seven widget tests pass, but
+the endpoint behaviour — create/get/update/complete/delete with cascade, the
+library submitting with the reflection persisted, progress numbers moving,
+sessions round-tripping, admin returning 403 without the claim — has not been
+exercised against Postgres. Two things block it:
+
+1. **The Firebase client config is still missing.** There is no
+   `google-services.json`, no `GoogleService-Info.plist` and no
+   `firebase_options.dart`. The app catches the init failure and reports
+   sign-in as unavailable rather than crashing, but no device build can
+   authenticate, so no endpoint can be reached from the app.
+2. The local backend and dev Supabase were not started in this session.
+
+The migration is also unapplied — `npm run migrate` has to run before the
+notification preferences column exists.
+
+### Deliberately unchanged
+
+**The AI Coach's reply.** Lifted out of the mock unchanged into
+`coach_reply_stub.dart` — one file, one job, named so it is obvious what to
+delete. The conversation, the transcript and the session history are real and
+persisted, which the mock never was; only the text of the reply is still
+generated on the device. The Claude pass replaces one call and removes that
+file, and nothing about the endpoints, the models or the repository's shape
+changes when it does.
+
+**The subscription repository.** Still mock. It reads the tier off the
+signed-in account, and the real source is RevenueCat webhooks, which is a later
+pass.
+
+**Out of scope as instructed:** Claude API, RAG, embeddings, FCM, RevenueCat,
+Stripe, and any deploy to Cloud Run.
+
+### Layer violations found
+
+One, and it was in the instruction rather than the code: the suggested
+subscription mapper reached into row shapes from a service. Resolved by mapping
+the document the repository already returns. Nothing else in the existing
+codebase broke the layer rule — the boundaries the earlier passes drew held
+under seven new feature areas without needing a shortcut.
