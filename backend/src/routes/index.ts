@@ -5,6 +5,10 @@ import {
   exerciseRouter,
 } from './exercise.routes.js';
 import { goalRouter } from './goal.routes.js';
+import {
+  notificationPreferenceRouter,
+  notificationRouter,
+} from './notification.routes.js';
 import { progressRouter } from './progress.routes.js';
 import { purposeRouter } from './purpose.routes.js';
 import { healthRouter } from './health.routes.js';
@@ -30,4 +34,6 @@ apiRouter.use('/me/goals', goalRouter);
 apiRouter.use('/me/exercise-responses', exerciseResponseRouter);
 apiRouter.use('/me/purpose', purposeRouter);
 apiRouter.use('/me/progress', progressRouter);
+apiRouter.use('/me/notifications', notificationRouter);
+apiRouter.use('/me/notification-preferences', notificationPreferenceRouter);
 apiRouter.use('/me', userRouter);
