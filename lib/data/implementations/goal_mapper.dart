@@ -35,7 +35,7 @@ class GoalMapper {
       targetDate: Json.date(json['targetDate'], fallback: createdAt),
       milestones: Json.objects(
         json['milestones'],
-      ).map(_milestoneFromJson).toList(growable: false),
+      ).map(milestoneFromJson).toList(growable: false),
       actions: Json.objects(json['actions'])
           .map((Map<String, Object?> entry) => _actionFromJson(entry, id))
           .toList(growable: false),
@@ -47,7 +47,9 @@ class GoalMapper {
     return Json.objects(value).map(fromJson).toList(growable: false);
   }
 
-  static Milestone _milestoneFromJson(Map<String, Object?> json) {
+  /// Public because Progress reads reached milestones from its own endpoint
+  /// and they carry the same shape — one mapping, not two that can drift.
+  static Milestone milestoneFromJson(Map<String, Object?> json) {
     return Milestone(
       id: Json.text(json['id']),
       title: Json.localized(json['title']),
