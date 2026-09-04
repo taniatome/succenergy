@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/network/request_guard.dart';
+
 import '../../data/models/chat_message.dart';
 import '../../data/repositories/coach_repository.dart';
 
@@ -7,21 +9,21 @@ import '../../data/repositories/coach_repository.dart';
 ///
 /// Holds the messages, the thinking state that precedes a reply, and the
 /// contextual suggestion chips.
-class CoachProvider extends ChangeNotifier {
+class CoachProvider extends ChangeNotifier with RequestGuard {
   CoachProvider(this._coach);
 
   final CoachRepository _coach;
 
   List<ChatMessage> _messages = const <ChatMessage>[];
   List<String> _suggestionKeys = const <String>[];
-  bool _loading = true;
+  // Loading and failure state come from RequestGuard.
   bool _thinking = false;
 
   List<ChatMessage> get messages => _messages;
 
   List<String> get suggestionKeys => _suggestionKeys;
 
-  bool get loading => _loading;
+  bool get loading => isBusy;
 
   /// True while the coach composes a reply, which renders the dot indicator.
   bool get thinking => _thinking;
@@ -31,12 +33,10 @@ class CoachProvider extends ChangeNotifier {
       !_thinking && _messages.isNotEmpty && _messages.last.isCoach;
 
   Future<void> load() async {
-    _loading = true;
-    notifyListeners();
-    _messages = await _coach.loadConversation();
-    _suggestionKeys = await _coach.loadSuggestionKeys();
-    _loading = false;
-    notifyListeners();
+    await guard(() async {
+      _messages = await _coach.loadConversation();
+      _suggestionKeys = await _coach.loadSuggestionKeys();
+    });
   }
 
   Future<void> send(String text) async {
@@ -56,16 +56,23 @@ class CoachProvider extends ChangeNotifier {
     ];
     notifyListeners();
 
-    await _coach.send(trimmed);
-    _messages = await _coach.loadConversation();
+    // The thinking indicator is the progress here, so the loader stays off.
+    // The flag is cleared in either outcome: a failed send that left it set
+    // would lock the composer for the rest of the session.
+    await guard(() async {
+      await _coach.send(trimmed);
+      _messages = await _coach.loadConversation();
+    }, showLoading: false);
+
     _thinking = false;
     notifyListeners();
   }
 
   Future<void> startNewSession() async {
     _thinking = false;
-    await _coach.startNewSession();
-    _messages = await _coach.loadConversation();
-    notifyListeners();
+    await guard(() async {
+      await _coach.startNewSession();
+      _messages = await _coach.loadConversation();
+    });
   }
 }

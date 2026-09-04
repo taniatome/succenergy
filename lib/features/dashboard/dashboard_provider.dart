@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/network/request_guard.dart';
+
 import '../../data/models/action_item.dart';
 import '../../data/models/app_notification.dart';
 import '../../data/models/exercise.dart';
@@ -11,7 +13,7 @@ import '../../data/repositories/notifications_repository.dart';
 import '../../data/repositories/user_repository.dart';
 
 /// Assembles everything the Dashboard shows from the repository interfaces.
-class DashboardProvider extends ChangeNotifier {
+class DashboardProvider extends ChangeNotifier with RequestGuard {
   DashboardProvider({
     required UserRepository users,
     required GoalsRepository goals,
@@ -32,11 +34,11 @@ class DashboardProvider extends ChangeNotifier {
   ActionItem? _todaysAction;
   int _completedExercises = 0;
   bool _hasUnread = false;
-  bool _loading = true;
+  // Loading and failure state come from RequestGuard.
 
   User? get user => _user;
 
-  bool get loading => _loading;
+  bool get loading => isBusy;
 
   List<Goal> get activeGoals =>
       _allGoals.where((Goal g) => !g.isCompleted).toList(growable: false);
@@ -58,8 +60,11 @@ class DashboardProvider extends ChangeNotifier {
   bool get hasUnreadNotifications => _hasUnread;
 
   Future<void> load() async {
-    _loading = true;
-    notifyListeners();
+    await guard(_read);
+  }
+
+  /// The five reads the Dashboard opens with, together rather than in turn.
+  Future<void> _read() async {
     final List<Object?> results = await Future.wait<Object?>(<Future<Object?>>[
       _users.loadUser(),
       _goals.loadGoals(),
@@ -77,8 +82,6 @@ class DashboardProvider extends ChangeNotifier {
     _hasUnread = (results[4] as List<AppNotification>).any(
       (AppNotification n) => !n.isRead,
     );
-    _loading = false;
-    notifyListeners();
   }
 
   /// Marks today's action done and refreshes the goal it belongs to.
@@ -87,13 +90,17 @@ class DashboardProvider extends ChangeNotifier {
     if (action == null || action.isDone) {
       return;
     }
-    await _goals.setActionDone(
-      goalId: action.goalId,
-      actionId: action.id,
-      isDone: true,
-    );
-    _todaysAction = action.copyWith(isDone: true);
-    _allGoals = await _goals.loadGoals();
-    notifyListeners();
+    // The card shows its own progress, so the loader stays off. The local
+    // copy is only advanced once the write has actually landed — marking it
+    // done first would leave the tick on a card whose action is still open.
+    await guard(() async {
+      await _goals.setActionDone(
+        goalId: action.goalId,
+        actionId: action.id,
+        isDone: true,
+      );
+      _todaysAction = action.copyWith(isDone: true);
+      _allGoals = await _goals.loadGoals();
+    }, showLoading: false);
   }
 }

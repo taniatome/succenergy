@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/network/request_guard.dart';
 import '../../data/models/goal.dart';
 import '../../data/models/principle.dart';
 import '../../data/repositories/goals_repository.dart';
@@ -8,15 +9,15 @@ import '../../data/repositories/goals_repository.dart';
 ///
 /// One provider covers both because they operate on the same collection and
 /// an edit made on the detail screen has to be visible in the list behind it.
-class GoalsProvider extends ChangeNotifier {
+class GoalsProvider extends ChangeNotifier with RequestGuard {
   GoalsProvider(this._goals);
 
   final GoalsRepository _goals;
 
   List<Goal> _all = const <Goal>[];
-  bool _loading = true;
 
-  bool get loading => _loading;
+  /// True until the first read resolves, one way or the other.
+  bool get loading => isBusy;
 
   List<Goal> get active =>
       _all.where((Goal g) => !g.isCompleted).toList(growable: false);
@@ -34,11 +35,21 @@ class GoalsProvider extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    _loading = true;
-    notifyListeners();
-    _all = await _goals.loadGoals();
-    _loading = false;
-    notifyListeners();
+    await guard(() async {
+      _all = await _goals.loadGoals();
+    });
+  }
+
+  /// Re-reads after a write, without blanking the screen for it.
+  ///
+  /// The list is already on the page and the control that started the write
+  /// shows its own progress, so the branded loader would be a flash of
+  /// nothing for no information.
+  Future<void> _refresh(Future<void> Function() write) async {
+    await guard(() async {
+      await write();
+      _all = await _goals.loadGoals();
+    }, showLoading: false);
   }
 
   Future<void> create({
@@ -47,14 +58,14 @@ class GoalsProvider extends ChangeNotifier {
     required Principle principle,
     required DateTime targetDate,
   }) async {
-    await _goals.createGoal(
-      title: title,
-      why: why,
-      principle: principle,
-      targetDate: targetDate,
+    await _refresh(
+      () => _goals.createGoal(
+        title: title,
+        why: why,
+        principle: principle,
+        targetDate: targetDate,
+      ),
     );
-    _all = await _goals.loadGoals();
-    notifyListeners();
   }
 
   /// Saves an edit made in the goal sheet. Title and reason are mirrored
@@ -65,30 +76,28 @@ class GoalsProvider extends ChangeNotifier {
     required String why,
     required Principle principle,
   }) async {
-    await _goals.updateGoal(
-      goal.copyWith(
-        title: <String, String>{'en': title, 'pt': title},
-        why: <String, String>{'en': why, 'pt': why},
-        principle: principle,
+    await _refresh(
+      () => _goals.updateGoal(
+        goal.copyWith(
+          title: <String, String>{'en': title, 'pt': title},
+          why: <String, String>{'en': why, 'pt': why},
+          principle: principle,
+        ),
       ),
     );
-    _all = await _goals.loadGoals();
-    notifyListeners();
   }
 
   Future<void> delete(String goalId) async {
-    await _goals.deleteGoal(goalId);
-    _all = await _goals.loadGoals();
-    notifyListeners();
+    await _refresh(() => _goals.deleteGoal(goalId));
   }
 
   Future<void> setCompleted({
     required String goalId,
     required bool completed,
   }) async {
-    await _goals.setGoalCompleted(goalId: goalId, completed: completed);
-    _all = await _goals.loadGoals();
-    notifyListeners();
+    await _refresh(
+      () => _goals.setGoalCompleted(goalId: goalId, completed: completed),
+    );
   }
 
   Future<void> setActionDone({
@@ -96,13 +105,13 @@ class GoalsProvider extends ChangeNotifier {
     required String actionId,
     required bool isDone,
   }) async {
-    await _goals.setActionDone(
-      goalId: goalId,
-      actionId: actionId,
-      isDone: isDone,
+    await _refresh(
+      () => _goals.setActionDone(
+        goalId: goalId,
+        actionId: actionId,
+        isDone: isDone,
+      ),
     );
-    _all = await _goals.loadGoals();
-    notifyListeners();
   }
 
   Future<void> setMilestoneReached({
@@ -110,12 +119,12 @@ class GoalsProvider extends ChangeNotifier {
     required String milestoneId,
     required bool isReached,
   }) async {
-    await _goals.setMilestoneReached(
-      goalId: goalId,
-      milestoneId: milestoneId,
-      isReached: isReached,
+    await _refresh(
+      () => _goals.setMilestoneReached(
+        goalId: goalId,
+        milestoneId: milestoneId,
+        isReached: isReached,
+      ),
     );
-    _all = await _goals.loadGoals();
-    notifyListeners();
   }
 }

@@ -41,6 +41,12 @@ class AppStrings {
     'common.inProgress': 'In progress',
     'common.notStarted': 'Not started',
     'common.offline': 'Offline. Showing what was last saved.',
+    'error.offline':
+        'No connection. Check your network and pull down to try again.',
+    'error.server': 'That did not load. Pull down to try again.',
+    'error.signedOut': 'Your session ended. Please sign in again.',
+    'error.generic': 'Something went wrong. Pull down to try again.',
+    'error.retry': 'Try again',
 
     // --- Principles --------------------------------------------------------
     'principle.purpose': 'Purpose',
@@ -674,6 +680,15 @@ class AppStrings {
     'common.inProgress': 'Em curso',
     'common.notStarted': 'Por começar',
     'common.offline': 'Sem ligação. A mostrar o último estado guardado.',
+    'error.offline':
+        'Sem ligação. Verifique a rede e arraste para baixo para tentar '
+        'novamente.',
+    'error.server':
+        'Não foi possível carregar. Arraste para baixo para tentar novamente.',
+    'error.signedOut': 'A sua sessão terminou. Entre novamente.',
+    'error.generic':
+        'Algo não correu bem. Arraste para baixo para tentar novamente.',
+    'error.retry': 'Tentar novamente',
 
     // --- Principles --------------------------------------------------------
     'principle.purpose': 'Purpose',
