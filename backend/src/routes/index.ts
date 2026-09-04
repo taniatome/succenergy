@@ -5,6 +5,7 @@ import {
   exerciseRouter,
 } from './exercise.routes.js';
 import { goalRouter } from './goal.routes.js';
+import { purposeRouter } from './purpose.routes.js';
 import { healthRouter } from './health.routes.js';
 import { userRouter } from './user.routes.js';
 
@@ -26,4 +27,5 @@ apiRouter.use('/health', healthRouter);
 apiRouter.use('/exercises', exerciseRouter);
 apiRouter.use('/me/goals', goalRouter);
 apiRouter.use('/me/exercise-responses', exerciseResponseRouter);
+apiRouter.use('/me/purpose', purposeRouter);
 apiRouter.use('/me', userRouter);
