@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { goalRouter } from './goal.routes.js';
 import { healthRouter } from './health.routes.js';
 import { userRouter } from './user.routes.js';
 
@@ -16,4 +17,7 @@ apiRouter.use('/health', healthRouter);
 
 // Authenticated. Each router applies requireAuth itself, so a route added to
 // one cannot silently inherit public access from the mount point.
+// Mounted before `/me` so `/me/goals` is not swallowed by the user router's
+// own `/:anything` handlers if any are added later.
+apiRouter.use('/me/goals', goalRouter);
 apiRouter.use('/me', userRouter);
