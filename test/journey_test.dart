@@ -1,33 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:provider/provider.dart';
-import 'package:provider/single_child_widget.dart';
-import 'package:succenergy_ai_coach/app/app.dart';
-import 'package:succenergy_ai_coach/core/localization/locale_provider.dart';
 import 'package:succenergy_ai_coach/app/routes.dart';
 import 'package:succenergy_ai_coach/core/widgets/icons/app_icon.dart';
+import 'package:succenergy_ai_coach/core/widgets/inputs/app_checkbox.dart';
 import 'package:succenergy_ai_coach/core/widgets/inputs/scale_input.dart';
 import 'package:succenergy_ai_coach/features/trial/trial_screen.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_auth_repository.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_coach_repository.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_exercises_repository.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_goals_repository.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_notifications_repository.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_progress_repository.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_subscription_repository.dart';
-import 'package:succenergy_ai_coach/data/mock/repositories/mock_user_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/auth_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/coach_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/exercises_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/goals_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/notifications_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/progress_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/subscription_repository.dart';
-import 'package:succenergy_ai_coach/data/repositories/user_repository.dart';
-import 'package:go_router/go_router.dart';
+
+import 'app_harness.dart';
 
 /// Walks the journey the client is asked to click through, and checks the
 /// layout holds at the narrowest supported width.
@@ -52,36 +35,16 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    return tester.pumpWidget(
-      MultiProvider(
-        providers: <SingleChildWidget>[
-          ChangeNotifierProvider<LocaleProvider>(
-            create: (_) => LocaleProvider(),
-          ),
-          Provider<AuthRepository>(create: (_) => MockAuthRepository()),
-          Provider<UserRepository>(create: (_) => MockUserRepository()),
-          Provider<GoalsRepository>(create: (_) => MockGoalsRepository()),
-          Provider<ExercisesRepository>(
-            create: (_) => MockExercisesRepository(),
-          ),
-          Provider<CoachRepository>(create: (_) => MockCoachRepository()),
-          Provider<ProgressRepository>(create: (_) => MockProgressRepository()),
-          Provider<NotificationsRepository>(
-            create: (_) => MockNotificationsRepository(),
-          ),
-          Provider<SubscriptionRepository>(
-            create: (_) => MockSubscriptionRepository(),
-          ),
-        ],
-        child: const SuccenergyApp(),
-      ),
-    );
+    return tester.pumpWidget(buildTestApp());
   }
 
-  // Repository latency and the splash hand-off are plain timers rather than
-  // animations, so time has to be advanced explicitly before settling.
+  // Repository latency and the routing that follows a sign-in are plain timers
+  // rather than animations, so time has to be advanced explicitly: pumping to
+  // settle only advances frames, and a pending timer schedules none. Six turns
+  // covers a sign-in, the account read behind it, the redirect and the arriving
+  // screen's own load.
   Future<void> settle(WidgetTester tester) async {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 500));
     }
     await tester.pumpAndSettle(const Duration(milliseconds: 120));
@@ -93,6 +56,33 @@ void main() {
 
   Future<void> tapText(WidgetTester tester, String text) async {
     await tester.tap(label(text).first);
+    await settle(tester);
+  }
+
+  // Signing in from Welcome, all the way to the Dashboard having loaded.
+  //
+  // The chain behind one tap is long — the credential, the offer to remember
+  // it, the account read, the redirect, then the arriving screen's own load —
+  // and each link is a timer rather than an animation, so it takes more than
+  // one settle to run out.
+  Future<void> signIn(WidgetTester tester) async {
+    await tapText(tester, 'I already have an account');
+    await tester.enterText(find.byType(TextField).at(0), 'marisa@lume.co.mz');
+    await tester.enterText(find.byType(TextField).at(1), 'succenergy2026');
+    await settle(tester);
+    await tapText(tester, 'Sign in');
+    await settle(tester);
+    await settle(tester);
+  }
+
+  // The consent statements carry a tappable link to the terms, which occupies
+  // most of the line — tapping the middle of the row would open the document
+  // rather than tick the box. The box itself is the reliable target.
+  Future<void> tickBox(WidgetTester tester, int index) async {
+    final Finder box = find.byType(AppCheckbox).at(index);
+    await tester.ensureVisible(box);
+    await settle(tester);
+    await tester.tapAt(tester.getTopLeft(box) + const Offset(11, 20));
     await settle(tester);
   }
 
@@ -124,22 +114,31 @@ void main() {
     await tapText(tester, 'Create your account');
   }
 
-  // The registration form, including the two sheets and both checkboxes.
+  // Registration, all three steps: the credential, then who you are, then
+  // consent.
   //
   // [student] picks the Student | Minorities activity, which is what decides
-  // the monthly rate shown on the trial screen.
+  // the monthly rate shown on the summary and again on the trial screen.
   Future<void> completeRegistration(
     WidgetTester tester, {
     bool student = false,
   }) async {
-    expect(label('Begin the first cycle'), findsWidgets);
-    await tester.enterText(find.byType(TextField).at(0), 'Marisa Chissano');
+    // Step one. The confirmation field only appears once there is a password
+    // to confirm, so the two are entered in order rather than by index.
+    expect(label('Your account'), findsWidgets);
     await tester.enterText(
-      find.byType(TextField).at(1),
+      find.byType(TextField).at(0),
       'marisa@lumeconsult.co.mz',
     );
+    await tester.enterText(find.byType(TextField).at(1), 'succenergy2026');
+    await settle(tester);
     await tester.enterText(find.byType(TextField).at(2), 'succenergy2026');
-    await tester.enterText(find.byType(TextField).at(3), 'succenergy2026');
+    await settle(tester);
+    await tapVisible(tester, 'Continue');
+
+    // Step two.
+    expect(label('About you'), findsWidgets);
+    await tester.enterText(find.byType(TextField).first, 'Marisa Chissano');
     await settle(tester);
 
     // Date of birth opens the wheel sheet, which starts at the youngest date
@@ -153,20 +152,15 @@ void main() {
     await settle(tester);
     await tapVisible(tester, 'Mozambique');
 
-    if (student) {
-      await tapVisible(tester, 'Student | Minorities');
-    }
+    await tapVisible(tester, student ? 'Student | Minorities' : 'Professional');
+    await tapVisible(tester, 'Continue');
 
-    // Both boxes have to be ticked before the form will submit.
-    await tapVisible(tester, 'Create account');
-    expect(label('Tick both boxes before you continue.'), findsWidgets);
-
-    await tapVisible(tester, 'I accept the terms and conditions.');
-    await tapText(
-      tester,
-      'I confirm that all the information I have given is true.',
-    );
-    await tapVisible(tester, 'Create account');
+    // Step three. The button is disabled rather than tapped-and-refused
+    // until both boxes are ticked.
+    expect(label('Almost there'), findsWidgets);
+    await tickBox(tester, 0);
+    await tickBox(tester, 1);
+    await tapVisible(tester, 'Create my account');
   }
 
   testWidgets('splash through quiz, trial and onboarding into the dashboard', (
@@ -295,11 +289,7 @@ void main() {
   ) async {
     await launch(tester);
     await settle(tester);
-    await tapText(tester, 'I already have an account');
-    await tester.enterText(find.byType(TextField).at(0), 'marisa@lume.co.mz');
-    await tester.enterText(find.byType(TextField).at(1), 'succenergy2026');
-    await settle(tester);
-    await tapText(tester, 'Log in');
+    await signIn(tester);
 
     expect(label('Your one action'), findsWidgets);
 
@@ -326,11 +316,7 @@ void main() {
   ) async {
     await launch(tester);
     await settle(tester);
-    await tapText(tester, 'I already have an account');
-    await tester.enterText(find.byType(TextField).at(0), 'marisa@lume.co.mz');
-    await tester.enterText(find.byType(TextField).at(1), 'succenergy2026');
-    await settle(tester);
-    await tapText(tester, 'Log in');
+    await signIn(tester);
 
     // Settings is reached only through the header's kebab menu.
     await tester.tap(
@@ -369,11 +355,7 @@ void main() {
     await settle(tester);
     expect(tester.takeException(), isNull);
 
-    await tapText(tester, 'I already have an account');
-    await tester.enterText(find.byType(TextField).at(0), 'marisa@lume.co.mz');
-    await tester.enterText(find.byType(TextField).at(1), 'succenergy2026');
-    await settle(tester);
-    await tapText(tester, 'Log in');
+    await signIn(tester);
 
     for (final String tab in <String>[
       'GOALS',

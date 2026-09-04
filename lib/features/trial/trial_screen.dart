@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
+import '../../core/auth/auth_state.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/localization/string_extensions.dart';
 import '../../core/theme/app_colors.dart';
@@ -23,6 +24,9 @@ import 'widgets/trial_unlock_list.dart';
 /// The app is free to download and nothing inside it opens until the trial is
 /// taken. No payment runs here: the CTA sets the mock subscription flag on the
 /// auth repository, which is the flag the router gates the app on.
+///
+/// The billing sentence beneath the CTA is the client's own wording, with the
+/// rate that follows from the activity chosen at registration.
 class TrialScreen extends StatefulWidget {
   const TrialScreen({super.key});
 
@@ -34,8 +38,17 @@ class _TrialScreenState extends State<TrialScreen> {
   bool _busy = false;
 
   Future<void> _start() async {
+    if (_busy) {
+      return;
+    }
+    final AuthRepository repository = context.read<AuthRepository>();
+    final AuthState session = context.read<AuthState>();
+
     setState(() => _busy = true);
-    await context.read<AuthRepository>().startTrial();
+    await repository.startTrial();
+    // The gate reads the account, not this screen, so it has to be told the
+    // trial was taken before it will let anything behind the paywall open.
+    await session.refresh();
     if (!mounted) {
       return;
     }
@@ -125,14 +138,12 @@ class _TrialScreenState extends State<TrialScreen> {
         index: 6,
         child: Text(
           context.tr(
-            'trial.smallPrint',
-            params: <String, String>{
-              'price': monthlyPrice,
-              'days': '${AppConstants.trialDays}',
-            },
+            activity == UserActivity.studentMinorities
+                ? 'trial.billing.student'
+                : 'trial.billing.professional',
+            params: <String, String>{'price': monthlyPrice},
           ),
           style: AppTypography.caption,
-          textAlign: TextAlign.center,
         ),
       ),
     ];

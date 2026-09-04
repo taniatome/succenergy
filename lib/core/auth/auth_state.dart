@@ -1,15 +1,15 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../network/api_exception.dart';
 import 'account_access.dart';
+import 'session_signal.dart';
 
 /// Where the app is in resolving who is signed in.
 enum AuthStatus {
-  /// Firebase has not reported yet, or the account is still being read. The
-  /// splash screen holds here.
+  /// Nothing reported yet, or the account is still being read. The splash
+  /// screen holds here.
   loading,
 
   /// Nobody is signed in.
@@ -21,21 +21,22 @@ enum AuthStatus {
 
 /// The app's single source of truth for the session.
 ///
-/// Wraps `authStateChanges()` and, whenever a user appears, resolves what that
-/// account may reach through the [SessionResolver]. The router watches this
-/// and redirects on every notification, which is why no screen in the app
+/// Watches a [SessionSignal] and, whenever a session appears, resolves what
+/// that account may reach through the [SessionResolver]. The router watches
+/// this and redirects on every notification, which is why no screen in the app
 /// checks whether anyone is signed in.
 class AuthState extends ChangeNotifier {
   AuthState({
     required SessionResolver resolver,
-    FirebaseAuth? auth,
+    required SessionSignal signal,
     this.minimumHold = Duration.zero,
   }) : _resolver = resolver,
-       _auth = auth ?? FirebaseAuth.instance,
+       _signal = signal,
        isAvailable = true {
-    _subscription = (auth ?? FirebaseAuth.instance).authStateChanges().listen(
-      _onUserChanged,
-    );
+    // The signal reports the current session on subscription, so the first
+    // event is what moves the app off the splash. Reading `hasSession` here
+    // instead would answer before Firebase had restored a persisted session.
+    _subscription = signal.changes.listen((void _) => _onSessionChanged());
   }
 
   /// The state to run in when Firebase could not start.
@@ -46,11 +47,17 @@ class AuthState extends ChangeNotifier {
   /// will never resolve.
   AuthState.unavailable()
     : _resolver = null,
-      _auth = null,
+      _signal = null,
       isAvailable = false,
       minimumHold = Duration.zero,
       _status = AuthStatus.unauthenticated,
       _leftLoading = true;
+
+  final SessionResolver? _resolver;
+  final SessionSignal? _signal;
+
+  /// False when the Firebase SDK failed to initialise on this device.
+  final bool isAvailable;
 
   /// How long the very first answer is held back for.
   ///
@@ -59,13 +66,7 @@ class AuthState extends ChangeNotifier {
   /// screen because the router moves the app, not the screen.
   final Duration minimumHold;
 
-  final SessionResolver? _resolver;
-  final FirebaseAuth? _auth;
-
-  /// False when the Firebase SDK failed to initialise on this device.
-  final bool isAvailable;
-
-  StreamSubscription<User?>? _subscription;
+  StreamSubscription<void>? _subscription;
 
   AuthStatus _status = AuthStatus.loading;
   AuthStatus get status => _status;
@@ -82,8 +83,8 @@ class AuthState extends ChangeNotifier {
   /// carries on with what it last knew and shows a banner.
   bool get isOffline => _isOffline;
 
-  /// Guards against a slow resolve for a previous user landing after a newer
-  /// one has already settled.
+  /// Guards against a slow resolve for a previous session landing after a
+  /// newer one has already settled.
   int _generation = 0;
 
   /// Re-reads the account. Called after registration and after the trial is
@@ -96,8 +97,10 @@ class AuthState extends ChangeNotifier {
   ///
   /// Registration is two writes: the credential, then the profile. Between
   /// them `GET /v1/me` answers 404, and the gate would send the flow back to
-  /// step two while step three is still running. The screen doing the writing
-  /// says when it is finished, and [resume] re-reads once.
+  /// step two while step three is still running. Sign-in holds it for the
+  /// same reason — the offer to remember the credentials has to be made before
+  /// the router leaves the screen. The screen doing the work says when it is
+  /// finished, and [resume] re-reads once.
   void suspend() {
     _suspended = true;
   }
@@ -107,13 +110,13 @@ class AuthState extends ChangeNotifier {
     await refresh();
   }
 
-  void _onUserChanged(User? user) {
+  void _onSessionChanged() {
     if (_suspended) {
       return;
     }
     final int generation = ++_generation;
 
-    if (user == null) {
+    if (!(_signal?.hasSession ?? false)) {
       _access = AccountAccess.unknown;
       _isOffline = false;
       _set(AuthStatus.unauthenticated);
@@ -128,7 +131,13 @@ class AuthState extends ChangeNotifier {
 
   Future<void> _resolve(int generation) async {
     final SessionResolver? resolver = _resolver;
-    if (_suspended || resolver == null || _auth?.currentUser == null) {
+    if (_suspended || resolver == null) {
+      return;
+    }
+    if (!(_signal?.hasSession ?? false)) {
+      _access = AccountAccess.unknown;
+      _isOffline = false;
+      _set(AuthStatus.unauthenticated);
       return;
     }
 
@@ -148,7 +157,7 @@ class AuthState extends ChangeNotifier {
   }
 
   /// A revoked session has already been signed out by the API client, so the
-  /// stream will report it and there is nothing to do here. Anything else is
+  /// signal will report it and there is nothing to do here. Anything else is
   /// treated as offline: the app keeps what it last knew, and a cold launch
   /// with nothing known opens the account rather than stranding it on the
   /// paywall because the network happens to be down.

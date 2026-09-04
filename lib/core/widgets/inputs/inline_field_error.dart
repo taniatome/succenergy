@@ -27,10 +27,10 @@ class InlineFieldError extends StatefulWidget {
 
 class _InlineFieldErrorState extends State<InlineFieldError>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: AppDurations.fast,
-  );
+  /// Built in initState rather than lazily: a field that is never wrong would
+  /// otherwise create its controller for the first time inside dispose, and
+  /// reach for a ticker on a widget already coming down.
+  late final AnimationController _controller;
 
   /// Held through the exit so there is still something to fade out.
   String? _shown;
@@ -41,6 +41,7 @@ class _InlineFieldErrorState extends State<InlineFieldError>
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(vsync: this, duration: AppDurations.fast);
     _shown = widget.message;
     if (_shown != null) {
       _controller.value = 1;

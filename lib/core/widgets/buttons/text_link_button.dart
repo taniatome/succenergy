@@ -14,12 +14,18 @@ class TextLinkButton extends StatefulWidget {
   const TextLinkButton({
     required this.label,
     required this.onPressed,
+    this.emphasis,
     this.isDestructive = false,
     super.key,
   });
 
   final String label;
   final VoidCallback? onPressed;
+
+  /// A substring of [label] carried in gold. Used where the line is a
+  /// sentence and only part of it is the invitation — "Don't have an account?
+  /// Start your journey."
+  final String? emphasis;
 
   /// Renders in the single error hue. Used only for account deletion.
   final bool isDestructive;
@@ -55,9 +61,30 @@ class _TextLinkButtonState extends State<TextLinkButton> {
           style: AppTypography.labelSmall.copyWith(
             color: _pressed ? active : color,
           ),
-          child: Text(widget.label),
+          child: _label(active),
         ),
       ),
+    );
+  }
+
+  Widget _label(Color active) {
+    final String? emphasis = widget.emphasis;
+    if (emphasis == null || !widget.label.contains(emphasis)) {
+      return Text(widget.label);
+    }
+    final int start = widget.label.indexOf(emphasis);
+    return Text.rich(
+      TextSpan(
+        children: <TextSpan>[
+          TextSpan(text: widget.label.substring(0, start)),
+          TextSpan(
+            text: emphasis,
+            style: TextStyle(color: active, fontWeight: FontWeight.w600),
+          ),
+          TextSpan(text: widget.label.substring(start + emphasis.length)),
+        ],
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }

@@ -23,8 +23,11 @@ class LaunchGate {
   const LaunchGate._();
 
   /// Reachable with no session at all.
+  ///
+  /// The splash is deliberately absent: it is where the app waits, not
+  /// somewhere it may stay. Once the session has resolved, every state has
+  /// somewhere better to be.
   static const Set<String> _public = <String>{
-    Routes.splash,
     Routes.welcome,
     Routes.language,
     Routes.quiz,

@@ -75,7 +75,20 @@ class AppRouter {
         _page(Routes.quiz, _quiz),
         _page(Routes.login, (_) => const LoginScreen()),
         _registration(),
-        _page(Routes.forgotPassword, (_) => const ForgotPasswordScreen()),
+        GoRoute(
+          path: Routes.forgotPassword,
+          pageBuilder:
+              (BuildContext context, GoRouterState state) =>
+                  AppPageTransitions.fadeThrough(
+                    // An address already typed on the sign-in screen travels
+                    // as an extra rather than in the path.
+                    child: ForgotPasswordScreen(
+                      initialEmail:
+                          state.extra is String ? state.extra! as String : '',
+                    ),
+                    state: state,
+                  ),
+        ),
         _page(Routes.trial, (_) => const TrialScreen()),
         _page(Routes.trialWelcome, (_) => const TrialWelcomeScreen()),
         _page(Routes.onboarding, _onboarding),

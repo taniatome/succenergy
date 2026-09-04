@@ -36,5 +36,6 @@ class ApiException implements Exception {
       kind == ApiFailureKind.notFound && code == 'profile_not_found';
 
   @override
-  String toString() => 'ApiException(${kind.name}, code: $code, status: $status)';
+  String toString() =>
+      'ApiException(${kind.name}, code: $code, status: $status)';
 }

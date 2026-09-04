@@ -3,13 +3,14 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/routes.dart';
+import '../../core/auth/secure_session_store.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/localization/locale_provider.dart';
 import '../../core/localization/string_extensions.dart';
+import '../../core/services/external_links.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/animated_reveal.dart';
 import '../../core/widgets/destructive_confirm_dialog.dart';
-import '../../core/widgets/inputs/app_switch.dart';
 import '../../core/widgets/screen_background.dart';
 import '../../data/models/subscription_plan.dart';
 import '../../data/repositories/auth_repository.dart';
@@ -36,10 +37,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
-    final SubscriptionTier tier =
-        await context.read<SubscriptionRepository>().loadCurrentTier();
+    final SubscriptionRepository subscriptions =
+        context.read<SubscriptionRepository>();
+    final SecureSessionStore store = context.read<SecureSessionStore>();
+
+    final SubscriptionTier tier = await subscriptions.loadCurrentTier();
+    final bool biometric = await store.isBiometricEnabled();
     if (mounted) {
-      setState(() => _tier = tier);
+      setState(() {
+        _tier = tier;
+        _biometric = biometric;
+      });
+    }
+  }
+
+  /// Turning biometric sign-in off is done here; turning it on is offered at
+  /// sign-in, which is the only place the password is in hand to store. So
+  /// this row reports the state and can only switch it off.
+  Future<void> _disableBiometric() async {
+    final bool confirmed = await DestructiveConfirmDialog.show(
+      context: context,
+      title: context.tr('settings.item.biometric'),
+      body: context.tr('settings.biometric.disable'),
+      confirmLabel: context.tr('settings.biometric.turnOff'),
+      isDestructive: false,
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    await context.read<SecureSessionStore>().clearBiometric();
+    if (mounted) {
+      setState(() => _biometric = false);
     }
   }
 
@@ -157,10 +185,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           rows: <Widget>[
             SettingsRow(
               label: context.tr('settings.item.biometric'),
-              trailing: AppSwitch(
-                value: _biometric,
-                onChanged: (bool v) => setState(() => _biometric = v),
+              value: context.tr(
+                _biometric
+                    ? 'settings.biometric.on'
+                    : 'settings.biometric.atSignIn',
               ),
+              onTap: _biometric ? _disableBiometric : null,
             ),
           ],
         ),
@@ -190,6 +220,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsRow(
               label: context.tr('settings.item.help'),
               onTap: () => context.push(Routes.help),
+            ),
+            SettingsRow(
+              label: context.tr('settings.item.terms'),
+              value: context.tr('settings.external'),
+              onTap: () => ExternalLinks.open(AppConstants.placeholderTermsUrl),
+            ),
+            SettingsRow(
+              label: context.tr('settings.item.privacy'),
+              value: context.tr('settings.external'),
+              onTap:
+                  () => ExternalLinks.open(AppConstants.placeholderPrivacyUrl),
             ),
             SettingsRow(
               label: context.tr('settings.item.admin'),

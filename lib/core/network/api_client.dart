@@ -31,12 +31,16 @@ class ApiClient {
   Future<Map<String, Object?>> get(String path) => _send('GET', path);
 
   /// Decoded `data` envelope from `POST <path>`.
-  Future<Map<String, Object?>> post(String path, {Map<String, Object?>? body}) =>
-      _send('POST', path, body: body);
+  Future<Map<String, Object?>> post(
+    String path, {
+    Map<String, Object?>? body,
+  }) => _send('POST', path, body: body);
 
   /// Decoded `data` envelope from `PATCH <path>`.
-  Future<Map<String, Object?>> patch(String path, {Map<String, Object?>? body}) =>
-      _send('PATCH', path, body: body);
+  Future<Map<String, Object?>> patch(
+    String path, {
+    Map<String, Object?>? body,
+  }) => _send('PATCH', path, body: body);
 
   /// Decoded `data` envelope from `DELETE <path>`.
   Future<Map<String, Object?>> delete(String path) => _send('DELETE', path);
@@ -51,7 +55,12 @@ class ApiClient {
     String path, {
     Map<String, Object?>? body,
   }) async {
-    http.Response response = await _dispatch(method, path, body, refresh: false);
+    http.Response response = await _dispatch(
+      method,
+      path,
+      body,
+      refresh: false,
+    );
 
     if (response.statusCode == 401) {
       response = await _dispatch(method, path, body, refresh: true);
@@ -84,8 +93,12 @@ class ApiClient {
     final String? encoded = body == null ? null : jsonEncode(body);
 
     try {
-      return await _request(method, uri, headers, encoded)
-          .timeout(AppConstants.apiTimeout);
+      return await _request(
+        method,
+        uri,
+        headers,
+        encoded,
+      ).timeout(AppConstants.apiTimeout);
     } on TimeoutException {
       throw const ApiException(ApiFailureKind.offline);
     } on http.ClientException {
@@ -163,7 +176,9 @@ class ApiClient {
     }
     try {
       final Object? decoded = jsonDecode(body);
-      return decoded is Map<String, Object?> ? decoded : const <String, Object?>{};
+      return decoded is Map<String, Object?>
+          ? decoded
+          : const <String, Object?>{};
     } on FormatException {
       // A body that is not JSON is a proxy or a captive portal answering, not
       // the API. Nothing here can act on it.

@@ -53,13 +53,24 @@ class _PrimaryButtonState extends State<PrimaryButton>
     with SingleTickerProviderStateMixin {
   bool _pressed = false;
 
-  /// The busy breath. Runs only while an action is in flight.
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: AppDurations.pulse ~/ 2,
-  );
+  /// The busy breath. Built here rather than lazily: a controller created for
+  /// the first time inside dispose would reach for a ticker on a widget that
+  /// is already coming down.
+  late final AnimationController _pulse;
 
   bool get _enabled => widget.onPressed != null && !widget.isBusy;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: AppDurations.pulse ~/ 2,
+    );
+    if (widget.isBusy) {
+      _pulse.repeat(reverse: true);
+    }
+  }
 
   @override
   void didUpdateWidget(PrimaryButton old) {

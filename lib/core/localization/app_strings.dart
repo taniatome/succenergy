@@ -549,6 +549,12 @@ class AppStrings {
     'settings.item.profile': 'Profile',
     'settings.item.changePassword': 'Change password',
     'settings.item.biometric': 'Unlock with biometrics',
+    'settings.biometric.on': 'On',
+    'settings.biometric.atSignIn': 'Offered at sign-in',
+    'settings.biometric.disable':
+        'Your saved credentials will be removed from this device. You can turn '
+        'it back on the next time you sign in.',
+    'settings.biometric.turnOff': 'Turn off',
     'settings.item.plan': 'Your plan',
     'settings.item.managePlan': 'Manage plan',
     'settings.section.succenergy': 'Succenergy',
@@ -1185,6 +1191,12 @@ class AppStrings {
     'settings.item.profile': 'Perfil',
     'settings.item.changePassword': 'Alterar palavra-passe',
     'settings.item.biometric': 'Desbloquear com biometria',
+    'settings.biometric.on': 'Ativo',
+    'settings.biometric.atSignIn': 'Oferecido ao entrar',
+    'settings.biometric.disable':
+        'As credenciais guardadas serão removidas deste dispositivo. Pode '
+        'voltar a ativar na próxima vez que entrar.',
+    'settings.biometric.turnOff': 'Desativar',
     'settings.item.plan': 'O seu plano',
     'settings.item.managePlan': 'Gerir plano',
     'settings.section.succenergy': 'Succenergy',

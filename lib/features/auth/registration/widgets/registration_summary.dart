@@ -37,13 +37,13 @@ class RegistrationSummary extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           _row(
             context,
-            label: context.tr('auth.summary.trialLabel'),
+            label: context.tr(
+              'auth.summary.trialLabel',
+              params: <String, String>{'days': '${AppConstants.trialDays}'},
+            ),
             value: context.tr(
               'auth.summary.trialValue',
-              params: <String, String>{
-                'days': '${AppConstants.trialDays}',
-                'price': AppConstants.trialPrice,
-              },
+              params: <String, String>{'price': AppConstants.trialPrice},
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
