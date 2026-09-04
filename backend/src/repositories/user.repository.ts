@@ -5,6 +5,7 @@ import type { SubscriptionDocument } from '../models/subscription.model.js';
 import type { UserDocument } from '../models/user.model.js';
 import type { Queryable, UserProfile, UserWriteResult } from './user_contracts.js';
 import { UserNotFoundError } from './errors.js';
+import { buildPatch } from './patch_builder.js';
 import { toDateColumn } from './row_mappers.js';
 import {
   ONBOARDING_ALIASED_COLUMNS,
@@ -176,28 +177,22 @@ export class UserRepository {
    * to the table's trigger, so a future call site cannot forget it.
    */
   async update(uid: string, patch: UserPatch): Promise<UserWriteResult> {
-    const columns: string[] = [];
-    const values: unknown[] = [];
-
-    const assign = (key: PatchColumnKey, value: unknown): void => {
-      values.push(value);
-      columns.push(`${USER_PATCH_COLUMNS[key]} = $${String(values.length)}`);
-    };
+    const columns: Partial<Record<PatchColumnKey, unknown>> = {};
 
     if (patch.name !== undefined) {
-      assign('name', patch.name);
+      columns.name = patch.name;
     }
     if (patch.preferredLanguage !== undefined) {
-      assign('preferredLanguage', patch.preferredLanguage);
+      columns.preferredLanguage = patch.preferredLanguage;
     }
     if (patch.activity !== undefined) {
-      assign('activity', patch.activity);
+      columns.activity = patch.activity;
     }
     if (patch.dateOfBirth !== undefined) {
-      assign('dateOfBirth', toDateColumn(patch.dateOfBirth));
+      columns.dateOfBirth = toDateColumn(patch.dateOfBirth);
     }
     if (patch.countryCode !== undefined) {
-      assign('countryCode', patch.countryCode);
+      columns.countryCode = patch.countryCode;
     }
 
     // Flattened here, not by the service. Only the keys actually present are
@@ -205,16 +200,18 @@ export class UserRepository {
     // exactly as they were.
     const preferences = patch.coachingPreferences;
     if (preferences?.tone !== undefined) {
-      assign('tone', preferences.tone);
+      columns.tone = preferences.tone;
     }
     if (preferences?.rhythm !== undefined) {
-      assign('rhythm', preferences.rhythm);
+      columns.rhythm = preferences.rhythm;
     }
     if (preferences?.remindersEnabled !== undefined) {
-      assign('remindersEnabled', preferences.remindersEnabled);
+      columns.remindersEnabled = preferences.remindersEnabled;
     }
 
-    if (columns.length === 0) {
+    const built = buildPatch(USER_PATCH_COLUMNS, columns);
+
+    if (built.clause === '') {
       // Nothing to write. Return the row rather than issuing an update with
       // an empty SET clause, which is a syntax error.
       const profile = await this.findProfile(uid);
@@ -224,13 +221,11 @@ export class UserRepository {
       return { user: profile.user, subscription: profile.subscription };
     }
 
-    values.push(uid);
-
     const { rows } = await query<UserRow>(
-      `update users set ${columns.join(', ')}
-        where id = $${String(values.length)}
+      `update users set ${built.clause}
+        where id = $${String(built.nextIndex)}
         returning *`,
-      values,
+      [...built.values, uid],
     );
 
     const row = rows[0];
