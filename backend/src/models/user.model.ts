@@ -1,5 +1,6 @@
 import type { LocaleCode } from './locale.model.js';
 import type { Principle } from './principle.model.js';
+import type { SubscriptionResult } from './subscription.model.js';
 
 /**
  * Table `users`, keyed by the Firebase Auth uid.
@@ -88,6 +89,15 @@ export interface UserResponse {
   /** Dart `User.joinedAt`, which is the account creation time. */
   joinedAt: string;
   updatedAt: string;
+
+  /**
+   * The account's subscription, or null when it has none.
+   *
+   * Explicitly null rather than an omitted field. The app's launch gate has
+   * to tell "this account has no subscription" apart from "the subscription
+   * was not fetched", and an absent key cannot say which.
+   */
+  subscription: SubscriptionResult | null;
 }
 
 export const DEFAULT_COACHING_PREFERENCES: CoachingPreferences = {
