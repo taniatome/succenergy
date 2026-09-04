@@ -1,5 +1,9 @@
 import { Router } from 'express';
 
+import {
+  exerciseResponseRouter,
+  exerciseRouter,
+} from './exercise.routes.js';
 import { goalRouter } from './goal.routes.js';
 import { healthRouter } from './health.routes.js';
 import { userRouter } from './user.routes.js';
@@ -19,5 +23,7 @@ apiRouter.use('/health', healthRouter);
 // one cannot silently inherit public access from the mount point.
 // Mounted before `/me` so `/me/goals` is not swallowed by the user router's
 // own `/:anything` handlers if any are added later.
+apiRouter.use('/exercises', exerciseRouter);
 apiRouter.use('/me/goals', goalRouter);
+apiRouter.use('/me/exercise-responses', exerciseResponseRouter);
 apiRouter.use('/me', userRouter);
