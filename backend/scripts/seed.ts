@@ -116,7 +116,18 @@ async function seedUser(uid: string): Promise<void> {
     // One statement, and the cascade removes goals, milestones, actions,
     // responses, sessions, messages, notifications, snapshots, purpose
     // answers, the subscription and the onboarding row with it.
-    await client.query('delete from users where id = $1', [uid]);
+    //
+    // Matched on the email as well as the uid, because the uid is only stable
+    // while the Auth emulator keeps its accounts. It is started without an
+    // import/export directory, so a restart empties it, `resolveUid` stops
+    // finding the persona and mints a *new* uid. A delete scoped to that new
+    // uid then clears nothing, and the next insert collides with the previous
+    // run's rows — the persona's ids (`goal-relaunch`, `ms-relaunch-1`, …) are
+    // fixed strings so the seeded data is readable, which makes them global
+    // primary keys rather than per-account ones. The email is what the persona
+    // is actually keyed to, so a row carrying it *is* the previous run's
+    // account, whatever uid it was written under.
+    await client.query('delete from users where id = $1 or email = $2', [uid, email]);
 
     // --- The person --------------------------------------------------------
 
