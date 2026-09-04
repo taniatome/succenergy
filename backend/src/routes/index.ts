@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { adminRouter } from './admin.routes.js';
 import {
   exerciseResponseRouter,
   exerciseRouter,
@@ -38,4 +39,7 @@ apiRouter.use('/me/progress', progressRouter);
 apiRouter.use('/me/notifications', notificationRouter);
 apiRouter.use('/me/notification-preferences', notificationPreferenceRouter);
 apiRouter.use('/me/sessions', sessionRouter);
+
+// Administrator only. The router applies requireAuth and requireAdmin itself.
+apiRouter.use('/admin', adminRouter);
 apiRouter.use('/me', userRouter);
