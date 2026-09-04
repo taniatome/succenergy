@@ -13,11 +13,11 @@ import 'core/auth/session_signal.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/motion/app_durations.dart';
 import 'core/network/api_client.dart';
+import 'data/implementations/api_goals_repository.dart';
 import 'data/implementations/firebase_auth_repository.dart';
 import 'data/implementations/unavailable_auth_repository.dart';
 import 'data/mock/repositories/mock_coach_repository.dart';
 import 'data/mock/repositories/mock_exercises_repository.dart';
-import 'data/mock/repositories/mock_goals_repository.dart';
 import 'data/mock/repositories/mock_notifications_repository.dart';
 import 'data/mock/repositories/mock_progress_repository.dart';
 import 'data/mock/repositories/mock_subscription_repository.dart';
@@ -33,10 +33,9 @@ import 'data/repositories/user_repository.dart';
 
 /// Application entry point.
 ///
-/// The only file that names a repository implementation. Authentication runs
-/// against Firebase and the Succenergy API; goals, exercises, the coach,
-/// progress and notifications are still mock, and swapping any of them is a
-/// change to one `create` line below.
+/// The only file that names a repository implementation. Authentication and
+/// goals run against Firebase and the Succenergy API; the rest are still
+/// mock, and swapping one is a change to one `create` line below.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
@@ -47,7 +46,11 @@ Future<void> main() async {
 
   final bool firebaseReady = await _startFirebase();
   const SecureSessionStore store = SecureSessionStore();
-  final AuthRepository auth = _authRepository(firebaseReady, store);
+
+  // One client for the whole app: it holds the http connection pool and the
+  // 401 refresh-and-retry, and a second would duplicate both.
+  final ApiClient api = ApiClient();
+  final AuthRepository auth = _authRepository(firebaseReady, store, api);
 
   runApp(
     MultiProvider(
@@ -60,7 +63,7 @@ Future<void> main() async {
           create: (_) => _authState(firebaseReady, auth),
         ),
         Provider<UserRepository>(create: (_) => MockUserRepository()),
-        Provider<GoalsRepository>(create: (_) => MockGoalsRepository()),
+        Provider<GoalsRepository>(create: (_) => ApiGoalsRepository(api)),
         Provider<ExercisesRepository>(create: (_) => MockExercisesRepository()),
         Provider<CoachRepository>(create: (_) => MockCoachRepository()),
         Provider<ProgressRepository>(create: (_) => MockProgressRepository()),
@@ -93,11 +96,15 @@ Future<bool> _startFirebase() async {
   }
 }
 
-AuthRepository _authRepository(bool firebaseReady, SecureSessionStore store) {
+AuthRepository _authRepository(
+  bool firebaseReady,
+  SecureSessionStore store,
+  ApiClient api,
+) {
   if (!firebaseReady) {
     return const UnavailableAuthRepository();
   }
-  return FirebaseAuthRepository(api: ApiClient(), store: store);
+  return FirebaseAuthRepository(api: api, store: store);
 }
 
 /// The splash sequence is held for its full run before the first routing

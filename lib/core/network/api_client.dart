@@ -30,6 +30,17 @@ class ApiClient {
   /// Decoded `data` envelope from `GET <path>`.
   Future<Map<String, Object?>> get(String path) => _send('GET', path);
 
+  /// The `data` array from a list endpoint.
+  ///
+  /// Reads that answer with a JSON array need their own accessor: [get]
+  /// unwraps the envelope to the object inside it, and a list is not one, so
+  /// it hands back the envelope instead. This takes the array out of it.
+  Future<List<Object?>> getAll(String path) async {
+    final Map<String, Object?> envelope = await _send('GET', path);
+    final Object? data = envelope['data'];
+    return data is List ? data : const <Object?>[];
+  }
+
   /// Decoded `data` envelope from `POST <path>`.
   Future<Map<String, Object?>> post(
     String path, {
